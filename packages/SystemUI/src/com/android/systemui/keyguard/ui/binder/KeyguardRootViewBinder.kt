@@ -150,50 +150,39 @@ object KeyguardRootViewBinder {
             view.repeatWhenAttached(mainImmediateDispatcher) {
                 repeatOnLifecycle(Lifecycle.State.CREATED) {
                     if (deviceEntryHapticsInteractor != null && vibratorHelper != null) {
+
                         launch {
                             deviceEntryHapticsInteractor.playSuccessHapticOnDeviceEntry.collect {
-                                val fpSuccessVibrate = Settings.System.getIntForUser(
-                                    context.contentResolver,
-                                    Settings.System.FP_SUCCESS_VIBRATE,
-                                    1,
-                                    UserHandle.USER_CURRENT
-                                ) == 1
-                                if (fpSuccessVibrate) {
-                                    if (msdlFeedback()) {
-                                        msdlPlayer?.playToken(
-                                            MSDLToken.UNLOCK,
-                                            authInteractionProperties,
-                                        )
-                                    } else {
-                                        vibratorHelper.performHapticFeedback(
-                                            view,
-                                            HapticFeedbackConstants.BIOMETRIC_CONFIRM,
-                                        )
-                                    }
+                                if (!isFpHapticEnabled(context, Settings.System.FP_SUCCESS_VIBRATE)) return@collect
+
+                                val playedMsdl = msdlFeedback() && (msdlPlayer?.let {
+                                    it.playToken(MSDLToken.UNLOCK, authInteractionProperties)
+                                    true
+                                } == true)
+
+                                if (!playedMsdl) {
+                                    vibratorHelper.performHapticFeedback(
+                                        view,
+                                        HapticFeedbackConstants.BIOMETRIC_CONFIRM
+                                    )
                                 }
                             }
                         }
 
                         launch {
                             deviceEntryHapticsInteractor.playErrorHaptic.collect {
-                                val fpErrorVibrate = Settings.System.getIntForUser(
-                                    context.contentResolver,
-                                    Settings.System.FP_ERROR_VIBRATE,
-                                    1,
-                                    UserHandle.USER_CURRENT
-                                ) == 1
-                                if (fpErrorVibrate) {
-                                    if (msdlFeedback()) {
-                                        msdlPlayer?.playToken(
-                                            MSDLToken.FAILURE,
-                                            authInteractionProperties,
-                                        )
-                                    } else {
-                                        vibratorHelper.performHapticFeedback(
-                                            view,
-                                            HapticFeedbackConstants.BIOMETRIC_REJECT,
-                                        )
-                                    }
+                                if (!isFpHapticEnabled(context, Settings.System.FP_ERROR_VIBRATE)) return@collect
+
+                                val playedMsdl = msdlFeedback() && (msdlPlayer?.let {
+                                    it.playToken(MSDLToken.FAILURE, authInteractionProperties)
+                                    true
+                                } == true)
+
+                                if (!playedMsdl) {
+                                    vibratorHelper.performHapticFeedback(
+                                        view,
+                                        HapticFeedbackConstants.BIOMETRIC_REJECT
+                                    )
                                 }
                             }
                         }
@@ -454,6 +443,11 @@ object KeyguardRootViewBinder {
             }
 
         return disposables
+    }
+
+    private fun isFpHapticEnabled(context: Context, key: String): Boolean {
+        return Settings.System.getIntForUser(
+            context.contentResolver, key, 1, UserHandle.USER_CURRENT) == 1
     }
 
     /**
