@@ -251,4 +251,7 @@
         <item quantity="one">%d device connected</item>
         <item quantity="other">%d devices connected</item>
     </plurals>
+
+    <!-- Name of the clock in status bar [CHAR LIMIT=30] -->
+    <string name="clock">Clock</string>
 </resources>

@@ -91,7 +91,7 @@ private constructor(
 ) : ViewController<PhoneStatusBarView>(view) {
 
     private lateinit var battery: BatteryMeterView
-    private lateinit var clock: Clock
+    val clockController by lazy { ClockController(context, mView) }
     private lateinit var startSideContainer: View
     private lateinit var endSideContainer: View
     private val statusBarContentInsetsProvider
@@ -167,12 +167,11 @@ private constructor(
         object : ConfigurationController.ConfigurationListener {
             override fun onDensityOrFontScaleChanged() {
                 ShadeWindowGoesAround.assertInLegacyMode()
-                clock.onDensityOrFontScaleChanged()
+                clockController.onDensityOrFontScaleChanged()
             }
         }
 
     override fun onViewAttached() {
-        clock = mView.requireViewById(R.id.clock)
         battery = mView.requireViewById(R.id.battery)
 
         addDarkReceivers()
@@ -325,12 +324,12 @@ private constructor(
 
     private fun addDarkReceivers() {
         darkIconDispatcher.addDarkReceiver(battery)
-        darkIconDispatcher.addDarkReceiver(clock)
+        clockController.addDarkReceiver()
     }
 
     private fun removeDarkReceivers() {
         darkIconDispatcher.removeDarkReceiver(battery)
-        darkIconDispatcher.removeDarkReceiver(clock)
+        clockController.removeDarkReceiver()
     }
 
     inner class PhoneStatusBarViewTouchHandler : Gefingerpoken {
