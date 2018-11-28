@@ -3286,7 +3286,7 @@
     <bool name="config_canSwitchToHeadlessSystemUser">false</bool>
 
     <!-- Whether UI for multi user should be shown -->
-    <bool name="config_enableMultiUserUI">false</bool>
+    <bool name="config_enableMultiUserUI">true</bool>
 
     <!-- Indicates the boot strategy in Headless System User Mode (HSUM)
          This config has no effect if the device is not in HSUM.
