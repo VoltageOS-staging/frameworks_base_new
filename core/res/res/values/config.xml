@@ -3192,7 +3192,7 @@
           appropriate maximum in {@link com.android.internal.R.xml#config_user_types}.
           Normally, storage shouldn't be the limiting factor, so this value should be at least as
           large as the sum of all individual user type maxima. -->
-    <integer name="config_multiuserMaximumUsers">1</integer>
+    <integer name="config_multiuserMaximumUsers">32</integer>
 
     <!-- Maximum number of users we allow to be running at a time. -->
     <integer name="config_multiuserMaxRunningUsers">3</integer>
