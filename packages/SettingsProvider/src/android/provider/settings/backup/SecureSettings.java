@@ -322,5 +322,7 @@ public class SecureSettings {
         Settings.Secure.SELECTED_SPELL_CHECKER_SUBTYPE,
         Settings.Secure.HDR_BRIGHTNESS_ENABLED,
         Settings.Secure.HDR_BRIGHTNESS_BOOST_LEVEL,
+        Settings.Secure.TORCH_DOUBLE_TAP_POWER_GESTURE_ENABLED,
+        Settings.Secure.TORCH_LONG_PRESS_POWER
     };
 }
