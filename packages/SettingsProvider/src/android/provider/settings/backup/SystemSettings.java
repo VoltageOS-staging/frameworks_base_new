@@ -129,7 +129,10 @@ public class SystemSettings {
                 Settings.System.CV_ENABLED,
                 Settings.System.CV_DYNAMIC_ENABLED,
                 Settings.System.CV_PREFERRED_INTENSITY,
-                Settings.System.LOCKSCREEN_ROTATION
+                Settings.System.LOCKSCREEN_ROTATION,
+                Settings.System.QS_SHOW_BATTERY_ESTIMATE,
+                Settings.System.STATUS_BAR_BATTERY_STYLE,
+                Settings.System.SHOW_BATTERY_PERCENT_INSIDE
         ));
         if (Flags.backUpSmoothDisplayAndForcePeakRefreshRate()) {
             settings.add(Settings.System.PEAK_REFRESH_RATE);
