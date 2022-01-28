@@ -6319,9 +6319,6 @@ public class UserManagerService extends IUserManager.Stub {
             }
             updateUserIds();
 
-            t.traceBegin("PM.onNewUserCreated-" + userId);
-            mPm.onNewUserCreated(userId, /* convertedFromPreCreated= */ false);
-            t.traceEnd();
             applyDefaultUserSettings(userTypeDetails, userId);
             setDefaultCrossProfileIntentFilters(userId, userTypeDetails, restrictions, parentId);
 
@@ -6340,6 +6337,10 @@ public class UserManagerService extends IUserManager.Stub {
             } else {
                 dispatchUserAdded(userInfo, token);
             }
+
+            t.traceBegin("PM.onNewUserCreated-" + userId);
+            mPm.onNewUserCreated(userId, /* convertedFromPreCreated= */ false);
+            t.traceEnd();
 
         } finally {
             Binder.restoreCallingIdentity(ident);
