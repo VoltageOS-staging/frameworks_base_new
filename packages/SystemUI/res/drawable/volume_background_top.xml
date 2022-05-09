@@ -20,6 +20,11 @@
             <solid android:color="@androidprv:color/materialColorSurface" />
             <corners android:topLeftRadius="@dimen/volume_dialog_background_corner_radius"
                 android:topRightRadius="@dimen/volume_dialog_background_corner_radius"/>
+    	<corners
+        	android:bottomLeftRadius="@dimen/volume_dialog_panel_width_half"
+        	android:topLeftRadius="@dimen/volume_dialog_panel_width_half"
+        	android:bottomRightRadius="@dimen/volume_dialog_panel_width_half"
+        	android:topRightRadius="@dimen/volume_dialog_panel_width_half" />
         </shape>
     </item>
 </layer-list>
