@@ -17,9 +17,13 @@
     xmlns:androidprv="http://schemas.android.com/apk/prv/res/android">
     <item>
         <shape>
-            <solid android:color="?androidprv:attr/materialColorSurface" />
-            <corners android:topLeftRadius="@dimen/volume_dialog_background_corner_radius"
-                android:topRightRadius="@dimen/volume_dialog_background_corner_radius"/>
+            <size android:width="@dimen/volume_dialog_panel_width" />
+            <solid android:color="?androidprv:attr/colorSurface" />
+    	<corners
+        	android:bottomLeftRadius="@dimen/volume_dialog_panel_width_half"
+        	android:topLeftRadius="@dimen/volume_dialog_panel_width_half"
+        	android:bottomRightRadius="@dimen/volume_dialog_panel_width_half"
+        	android:topRightRadius="@dimen/volume_dialog_panel_width_half" />
         </shape>
     </item>
 </layer-list>
