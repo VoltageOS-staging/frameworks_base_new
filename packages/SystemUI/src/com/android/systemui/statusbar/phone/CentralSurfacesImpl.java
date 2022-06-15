@@ -240,6 +240,7 @@ import com.android.systemui.statusbar.policy.UserInfoControllerImpl;
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.surfaceeffects.ripple.RippleShader.RippleShape;
+import com.android.systemui.tuner.TunerService;
 import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.MediaArtUtils;
 import com.android.systemui.util.WallpaperController;
@@ -253,6 +254,8 @@ import com.android.systemui.wallet.controller.QuickAccessWalletController;
 import com.android.wm.shell.bubbles.Bubbles;
 import com.android.wm.shell.startingsurface.SplashscreenContentDrawer;
 import com.android.wm.shell.startingsurface.StartingSurface;
+
+import android.provider.Settings;
 
 import dalvik.annotation.optimization.NeverCompile;
 
@@ -285,7 +288,10 @@ import javax.inject.Named;
  * {@link ActivityStarterImpl}
  */
 @SysUISingleton
-public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
+public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces, TunerService.Tunable {
+
+    private static final String QS_TRANSPARENCY =
+            "system:" + Settings.System.QS_TRANSPARENCY;
 
     private static final int MSG_LAUNCH_TRANSITION_TIMEOUT = 1003;
     // 1020-1040 reserved for BaseStatusBar
@@ -483,6 +489,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     private final MessageRouter mMessageRouter;
     private final WallpaperManager mWallpaperManager;
     private final UserTracker mUserTracker;
+    private final TunerService mTunerService;
     private final ActivityStarter mActivityStarter;
 
     private GameSpaceManager mGameSpaceManager;
@@ -763,6 +770,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             LightRevealScrim lightRevealScrim,
             AlternateBouncerInteractor alternateBouncerInteractor,
             UserTracker userTracker,
+            TunerService tunerService,
             ActivityStarter activityStarter,
             BrightnessMirrorShowingRepository brightnessMirrorShowingRepository,
             GlanceableHubContainerController glanceableHubContainerController,
@@ -862,6 +870,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mCameraLauncherLazy = cameraLauncherLazy;
         mAlternateBouncerInteractor = alternateBouncerInteractor;
         mUserTracker = userTracker;
+        mTunerService = tunerService;
         mActivityStarter = activityStarter;
         mBrightnessMirrorShowingRepository = brightnessMirrorShowingRepository;
         if (!SceneContainerFlag.isEnabled()) {
@@ -944,6 +953,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mKeyguardIndicationController.init();
 
         mColorExtractor.addOnColorsChangedListener(mOnColorsChangedListener);
+
+        mTunerService.addTunable(this, QS_TRANSPARENCY);
 
         mDisplay = mContext.getDisplay();
         mDisplayId = mDisplay.getDisplayId();
@@ -3084,6 +3095,17 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     public boolean isBouncerShowingScrimmed() {
         return isBouncerShowing() && mStatusBarKeyguardViewManager.primaryBouncerNeedsScrimming();
     }
+
+    @Override
+    public void onTuningChanged(String key, String newValue) {
+        switch (key) {
+            case QS_TRANSPARENCY:
+                mScrimController.setCustomScrimAlpha(
+                        TunerService.parseInteger(newValue, 100));
+                break;
+                }
+                break;
+        }
 
     @Override
     public GameSpaceManager getGameSpaceManager() {

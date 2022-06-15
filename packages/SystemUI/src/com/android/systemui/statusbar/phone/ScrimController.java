@@ -440,12 +440,6 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         behindScrim.enableBottomEdgeConcave(mClipsQsScrim);
         mNotificationsScrim.enableRoundedCorners(true);
 
-        if (mScrimBehind != null) {
-            mCustomScrimAlpha = (Settings.System.getFloatForUser(
-                mScrimBehind.getContext().getContentResolver(),
-                Settings.System.QS_TRANSPARENCY, 100,
-                UserHandle.USER_CURRENT) / 100);
-        }
         final ScrimState[] states = ScrimState.values();
         for (int i = 0; i < states.length; i++) {
             states[i].init(mScrimInFront, mScrimBehind, mDozeParameters, mDockManager,
@@ -1018,6 +1012,11 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     public void setDualToneColor(boolean useDualToneColor) {
         mUseDualToneColor = useDualToneColor;
         onThemeChanged();
+    }
+
+    public void setCustomScrimAlpha(int value) {
+        mCustomScrimAlpha = (float) value / 100f;
+        applyState();
     }
 
     private void applyState() {
