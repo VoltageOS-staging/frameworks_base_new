@@ -69,6 +69,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.graphics.ColorUtils;
+import com.android.internal.libremobileos.app.ParallelSpaceManager;
 import com.android.systemui.CoreStartable;
 import com.android.systemui.Dumpable;
 import com.android.systemui.broadcast.BroadcastDispatcher;
@@ -391,7 +392,12 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
         @Override
         public void onReceive(Context context, Intent intent) {
             boolean newProfile = Intent.ACTION_PROFILE_ADDED.equals(intent.getAction());
-            if (newProfile) {
+            boolean isParallelSpace =
+                    Intent.ACTION_PARALLEL_SPACE_CHANGED.equals(intent.getAction());
+            if (isParallelSpace) {
+                if (DEBUG) Log.d(TAG, "Updating overlays for parallel user added.");
+                reevaluateSystemTheme(true /* forceReload */);
+            } else if (newProfile) {
                 UserHandle newUserHandle = intent.getParcelableExtra(Intent.EXTRA_USER,
                         android.os.UserHandle.class);
                 boolean isManagedProfile =
@@ -477,6 +483,7 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
         if (DEBUG) Log.d(TAG, "Start");
         final IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_PROFILE_ADDED);
+        filter.addAction(Intent.ACTION_PARALLEL_SPACE_CHANGED);
         filter.addAction(Intent.ACTION_WALLPAPER_CHANGED);
         mBroadcastDispatcher.registerReceiver(mBroadcastReceiver, filter, mMainExecutor,
                 UserHandle.ALL);
@@ -849,6 +856,7 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
                 managedProfiles.add(userInfo.getUserHandle());
             }
         }
+        managedProfiles.addAll(ParallelSpaceManager.getInstance().getParallelUserHandles());
 
         final Runnable onCompleteCallback = () -> {
             Log.d(TAG, "ThemeHomeDelay: ThemeOverlayController ready with user "
