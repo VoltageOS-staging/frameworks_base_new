@@ -40,6 +40,7 @@ import android.hardware.input.IInputSensorEventListener;
 import android.hardware.input.IKeyEventActivityListener;
 import android.hardware.input.InputSensorInfo;
 import android.hardware.input.KeyGlyphMap;
+import android.hardware.input.ICursorCallback;
 import android.hardware.lights.Light;
 import android.hardware.lights.LightState;
 import android.os.IBinder;
@@ -319,4 +320,7 @@ interface IInputManager {
     PointF getCursorPositionInPhysicalDisplay(int displayId);
 
     PointF getCursorPositionInLogicalDisplay(int displayId);
+
+    void registerCursorCallback(ICursorCallback callbacks);
+    void unregisterCursorCallback(ICursorCallback callbacks);
 }
