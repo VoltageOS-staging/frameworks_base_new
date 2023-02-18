@@ -33,6 +33,9 @@ public class ExtSettings {
             // default value: 18 hours
             (int) TimeUnit.HOURS.toMillis(18));
 
+    public static final BoolSetting SCREENSHOT_TIMESTAMP_EXIF = new BoolSetting(
+            Setting.Scope.PER_USER, Settings.Secure.SCREENSHOT_TIMESTAMP_EXIF, false);
+
     private ExtSettings() {}
 
     public static Function<Context, Boolean> defaultBool(@BoolRes int res) {
