@@ -133,7 +133,9 @@ class InputSettingsObserver extends ContentObserver {
                         (reason) -> updatePointerScaleFromSettings()),
                 Map.entry(Settings.System.getUriFor(
                                 Settings.System.TOUCHPAD_THREE_FINGER_TAP_CUSTOMIZATION),
-                        (reason) -> updateTouchpadThreeFingerTapShortcutEnabled()));
+                        (reason) -> updateTouchpadThreeFingerTapShortcutEnabled()),
+                Map.entry(Settings.System.getUriFor(Settings.System.PREVENT_POINTER_ACCELERATION),
+                        (reason) -> updatePreventPointerAcceleration()));
     }
 
     /**
@@ -381,5 +383,14 @@ class InputSettingsObserver extends ContentObserver {
                 Settings.System.POINTER_SCALE, DEFAULT_POINTER_SCALE,
                 UserHandle.USER_CURRENT);
         mService.setPointerScale(pointerScale);
+    }
+
+    private void updatePreventPointerAcceleration() {
+        int preventPointerAcceleration = Settings.System.getIntForUser(
+                mContext.getContentResolver(),
+                Settings.System.PREVENT_POINTER_ACCELERATION, 0,
+                UserHandle.USER_CURRENT);
+        preventPointerAcceleration = Math.min(Math.max(preventPointerAcceleration, 0), 3);
+        mNative.setPreventPointerAcceleration(preventPointerAcceleration);
     }
 }
