@@ -1663,6 +1663,16 @@ UnflaggedApi: android.view.inputmethod.InputMethodManager#hideSoftInputFromWindo
     Changes from not deprecated to deprecated must be flagged with @FlaggedApi: method android.view.inputmethod.InputMethodManager.hideSoftInputFromWindow(android.os.IBinder,int,android.os.ResultReceiver)
 UnflaggedApi: android.view.inputmethod.InputMethodManager#showSoftInput(android.view.View, int, android.os.ResultReceiver):
     Changes from not deprecated to deprecated must be flagged with @FlaggedApi: method android.view.inputmethod.InputMethodManager.showSoftInput(android.view.View,int,android.os.ResultReceiver)
+UnflaggedApi: android.widget.WallpaperView:
+    New API must be flagged with @FlaggedApi: class android.widget.WallpaperView
+UnflaggedApi: android.widget.WallpaperView#WallpaperView(android.content.Context):
+    New API must be flagged with @FlaggedApi: constructor android.widget.WallpaperView(android.content.Context)
+UnflaggedApi: android.widget.WallpaperView#WallpaperView(android.content.Context, android.util.AttributeSet):
+    New API must be flagged with @FlaggedApi: constructor android.widget.WallpaperView(android.content.Context,android.util.AttributeSet)
+UnflaggedApi: android.widget.WallpaperView#WallpaperView(android.content.Context, android.util.AttributeSet, int):
+    New API must be flagged with @FlaggedApi: constructor android.widget.WallpaperView(android.content.Context,android.util.AttributeSet,int)
+UnflaggedApi: android.widget.WallpaperView#onSizeChanged(int, int, int, int):
+    New API must be flagged with @FlaggedApi: method android.widget.WallpaperView.onSizeChanged(int,int,int,int)
 
 
 UserHandleName: android.service.notification.NotificationListenerService#createConversationNotificationChannelForPackage(String, android.os.UserHandle, String, String):
