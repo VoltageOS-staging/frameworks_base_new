@@ -247,7 +247,6 @@ public class KeyguardClockSwitchController extends ViewController<KeyguardClockS
             mDumpManager.unregisterDumpable(getClass().getSimpleName()); // unregister previous
             mDumpManager.registerDumpable(getClass().getSimpleName(), this);
         }
-        mTunerService.addTunable(this, LOCKSCREEN_WEATHER_ENABLED);
     }
 
     public KeyguardClockSwitch getView() {
@@ -316,8 +315,12 @@ public class KeyguardClockSwitchController extends ViewController<KeyguardClockS
         mKeyguardUnlockAnimationController.addKeyguardUnlockAnimationListener(
                 mKeyguardUnlockAnimationListener);
 
-        updateWeatherView();
+        mTunerService.addTunable(this, LOCKSCREEN_WEATHER_ENABLED);
 
+        updateViews();
+    }
+
+    private void updateViews() {
         if (mSmartspaceController.isEnabled()) {
             View ksv = mView.findViewById(R.id.keyguard_slice_view);
             int viewIndex = mStatusArea.indexOfChild(ksv);
@@ -394,6 +397,7 @@ public class KeyguardClockSwitchController extends ViewController<KeyguardClockS
                 }
             }
         });
+        updateViews();
     }
 
     void onLocaleListChanged() {
