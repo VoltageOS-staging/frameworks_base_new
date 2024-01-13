@@ -28,6 +28,11 @@ public class ExtSettings {
     public static final BoolSetting AUTO_GRANT_OTHER_SENSORS_PERMISSION = new BoolSetting(
             Setting.Scope.PER_USER, Settings.Secure.AUTO_GRANT_OTHER_SENSORS_PERMISSION, true);
 
+    public static final IntSetting AUTO_REBOOT_TIMEOUT = new IntSetting(
+            Setting.Scope.GLOBAL, Settings.Global.AUTO_REBOOT_TIMEOUT,
+            // default value: 18 hours
+            (int) TimeUnit.HOURS.toMillis(18));
+
     private ExtSettings() {}
 
     public static Function<Context, Boolean> defaultBool(@BoolRes int res) {
