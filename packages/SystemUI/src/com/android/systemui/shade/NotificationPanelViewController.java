@@ -66,6 +66,7 @@ import android.graphics.Shader;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.PowerManager;
 import android.os.Trace;
 import android.provider.Settings;
 import android.util.IndentingPrintWriter;
@@ -304,6 +305,7 @@ public final class NotificationPanelViewController implements
     private final ConfigurationController mConfigurationController;
     private final Provider<FlingAnimationUtils.Builder> mFlingAnimationUtilsBuilder;
     private final NotificationStackScrollLayoutController mNotificationStackScrollLayoutController;
+    private final PowerManager mPowerManager;
     private final AccessibilityManager mAccessibilityManager;
     private final NotificationWakeUpCoordinator mWakeUpCoordinator;
     private final PulseExpansionHandler mPulseExpansionHandler;
@@ -604,6 +606,7 @@ public final class NotificationPanelViewController implements
             CommandQueue commandQueue,
             VibratorHelper vibratorHelper,
             LatencyTracker latencyTracker,
+            PowerManager powerManager,
             AccessibilityManager accessibilityManager,
             @DisplayId int displayId,
             KeyguardUpdateMonitor keyguardUpdateMonitor,
@@ -763,6 +766,7 @@ public final class NotificationPanelViewController implements
         mShadeHeaderController = shadeHeaderController;
         mAnimateBack = predictiveBackAnimateShade();
         mFalsingCollector = falsingCollector;
+        mPowerManager = powerManager;
         mWakeUpCoordinator = coordinator;
         mMainDispatcher = mainDispatcher;
         mAccessibilityManager = accessibilityManager;
