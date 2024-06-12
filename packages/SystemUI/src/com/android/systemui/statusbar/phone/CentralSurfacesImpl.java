@@ -83,6 +83,7 @@ import android.view.IWindowManager;
 import android.view.MotionEvent;
 import android.view.ThreadedRenderer;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowManagerGlobal;
@@ -239,6 +240,7 @@ import com.android.systemui.statusbar.window.StatusBarWindowController;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.surfaceeffects.ripple.RippleShader.RippleShape;
 import com.android.systemui.util.DumpUtilsKt;
+import com.android.systemui.util.MediaArtUtils;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.MessageRouter;
@@ -446,6 +448,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     private final StatusBarSignalPolicy mStatusBarSignalPolicy;
     private final StatusBarHideIconsForBouncerManager mStatusBarHideIconsForBouncerManager;
     private final Lazy<LightRevealScrimViewModel> mLightRevealScrimViewModelLazy;
+
+    private final MediaArtUtils mMediaArtUtils;
 
     /** Controller for the Shade. */
     private final ShadeSurface mShadeSurface;
@@ -884,6 +888,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         if (PredictiveBackSysUiFlag.isEnabled()) {
             mContext.getApplicationInfo().setEnableOnBackInvokedCallback(true);
         }
+        mMediaArtUtils = MediaArtUtils.getInstance(mContext);
     }
 
     private void initBubbles(Bubbles bubbles) {
@@ -1112,6 +1117,14 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 (requestTopUi, componentTag) -> mMainExecutor.execute(() ->
                         mNotificationShadeWindowController.setRequestTopUi(
                                 requestTopUi, componentTag))));
+		getNotifContainerParentView().addView(mMediaArtUtils.getMediaArtScrim(), 0);
+    }
+    
+    
+    private ViewGroup getNotifContainerParentView() {
+        ViewGroup rootView = (ViewGroup) getNotificationShadeWindowView().findViewById(R.id.scrim_behind).getParent();
+        ViewGroup targetView = rootView.findViewById(R.id.notification_container_parent);
+        return targetView;
     }
 
     @VisibleForTesting
@@ -2606,6 +2619,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             }
 
             DejankUtils.stopDetectingBlockingIpcs(tag);
+            mMediaArtUtils.updateMediaArtVisibility();
             if (Settings.System.getIntForUser(mContext.getContentResolver(),
                                               Settings.System.ARCANE_IDLE_MANAGER, 1,
                                               mLockscreenUserManager.getCurrentUserId()) == 1) {
