@@ -1197,6 +1197,16 @@ public class PackageInstaller {
         }
     }
 
+    /** @hide */
+    @RequiresPermission(Manifest.permission.INSTALL_GRANT_RUNTIME_PERMISSIONS)
+    public void updatePermissionStates(int sessionId, String[] permissionNames, int[] states) {
+        try {
+            mInstaller.updatePermissionStates(sessionId, permissionNames, states);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
     /**
      * Check if install constraints are satisfied for the given packages.
      *
@@ -2850,7 +2860,7 @@ public class PackageInstaller {
         /** {@hide} */
         public boolean isAutoInstallDependenciesEnabled = true;
 
-        private final ArrayMap<String, Integer> mPermissionStates;
+        private volatile ArrayMap<String, Integer> mPermissionStates;
         /**
          * {@hide}
          *
@@ -3131,12 +3141,19 @@ public class PackageInstaller {
         @NonNull
         public SessionParams setPermissionState(@NonNull String permissionName,
                 @PermissionState int state) {
+            setPermissionState(mPermissionStates, permissionName, state);
+            return this;
+        }
+
+        /** @hide */
+        public static void setPermissionState(ArrayMap<String, Integer> states,
+                  @NonNull String permissionName, @PermissionState int state) {
             if (TextUtils.isEmpty(permissionName)) {
                 throw new IllegalArgumentException("Provided permissionName cannot be "
                         + (permissionName == null ? "null" : "empty"));
             }
             if (state != PERMISSION_STATE_DEFAULT
-                    && !validatePermissionStates(Set.of(permissionName))) {
+                    && !validatePermissionStates(states, Set.of(permissionName))) {
                 throw new IllegalArgumentException(
                         "Permissions states exceeds size limits total size limit of "
                                 + MAX_PERMISSION_STATES_SIZE + " in length");
@@ -3144,22 +3161,20 @@ public class PackageInstaller {
 
             switch (state) {
                 case PERMISSION_STATE_DEFAULT:
-                    mPermissionStates.remove(permissionName);
+                    states.remove(permissionName);
                     break;
                 case PERMISSION_STATE_GRANTED:
                 case PERMISSION_STATE_DENIED:
-                    mPermissionStates.put(permissionName, state);
+                    states.put(permissionName, state);
                     break;
                 default:
                     throw new IllegalArgumentException("Unexpected permission state int: " + state);
             }
-
-            return this;
         }
 
-        private boolean validatePermissionStates(Collection<String> permissionNames) {
+        private static boolean validatePermissionStates(ArrayMap<String, Integer> permissionStates, Collection<String> permissionNames) {
             int totalLength = 0;
-            for (String permission : mPermissionStates.keySet()) {
+            for (String permission : permissionStates.keySet()) {
                 totalLength += permission.length();
             }
             for (String permission : permissionNames) {
@@ -3173,7 +3188,7 @@ public class PackageInstaller {
                 Collection<String> denyPermissions) {
             Set<String> newPermissions = new HashSet<>(grantPermissions);
             newPermissions.addAll(denyPermissions);
-            if (!validatePermissionStates(newPermissions)) {
+            if (!validatePermissionStates(mPermissionStates, newPermissions)) {
                 throw new IllegalArgumentException(
                         "Permissions states exceeds size limits total size limit of "
                                 + MAX_PERMISSION_STATES_SIZE + " in length");
@@ -3677,6 +3692,11 @@ public class PackageInstaller {
         @NonNull
         public ArrayMap<String, Integer> getPermissionStates() {
             return mPermissionStates;
+        }
+
+        /** @hide */
+        public void replacePermissionStates(ArrayMap<String, Integer> states) {
+            mPermissionStates = states;
         }
 
         /** @hide */
