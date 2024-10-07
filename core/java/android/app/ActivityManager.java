@@ -3680,6 +3680,10 @@ public class ActivityManager {
          */
         public byte[] crashData = null;
 
+        /** @hide */
+        @Nullable
+        public String tracesFilePath;
+
         public ProcessErrorStateInfo() {
         }
 
@@ -3698,6 +3702,7 @@ public class ActivityManager {
             dest.writeString(shortMsg);
             dest.writeString(longMsg);
             dest.writeString(stackTrace);
+            dest.writeString(tracesFilePath);
         }
 
         public void readFromParcel(Parcel source) {
@@ -3709,6 +3714,7 @@ public class ActivityManager {
             shortMsg = source.readString();
             longMsg = source.readString();
             stackTrace = source.readString();
+            tracesFilePath = source.readString();
         }
 
         public static final @android.annotation.NonNull Creator<ProcessErrorStateInfo> CREATOR =
