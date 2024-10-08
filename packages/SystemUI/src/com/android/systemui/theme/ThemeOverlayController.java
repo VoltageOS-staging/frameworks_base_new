@@ -860,10 +860,10 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
 
         if (mNeedsOverlayCreation) {
             mNeedsOverlayCreation = false;
-            FabricatedOverlay[] fOverlay = new FabricatedOverlay[isBlackMode ? 2 : 3];
+            fOverlays = new FabricatedOverlay[isBlackMode ? 2 : 3];
             int c = 0;
             fOverlays[c++] = mAccentOverlay;
-            if (!isBlackMode) fOverlay[c++] = mNeutralOverlay;
+            if (!isBlackMode) {
                 fOverlays[c++] = mNeutralOverlay;
             }
             fOverlays[c++] = mDynamicOverlay;
