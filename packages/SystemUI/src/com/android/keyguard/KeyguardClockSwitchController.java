@@ -430,7 +430,7 @@ public class KeyguardClockSwitchController extends ViewController<KeyguardClockS
     }
 
     private void addWeatherView() {
-        if (MigrateClocksToBlueprint.isEnabled()) {
+        if (MigrateClocksToBlueprint.isEnabled() || mDateWeatherView == null) {
             return;
         }
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -735,6 +735,9 @@ public class KeyguardClockSwitchController extends ViewController<KeyguardClockS
     }
 
     private void removeViewsFromStatusArea() {
+        if (mStatusArea == null) {
+            return;
+        }
         for  (int i = mStatusArea.getChildCount() - 1; i >= 0; i--) {
             final View childView = mStatusArea.getChildAt(i);
             if (childView.getTag(R.id.tag_smartspace_view) != null) {
