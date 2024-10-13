@@ -255,4 +255,12 @@
     <string name="quick_settings_notif_suppress_off">Normal notifications</string>
     <string name="quick_settings_notif_suppress_timer">Silent for %s</string>
 
+    <!-- Weather -->
+    <string name="weather_condition_clouds">Cloudy</string>
+    <string name="weather_condition_rain">Rainy</string>
+    <string name="weather_condition_clear">Sunny</string>
+    <string name="weather_condition_storm">Stormy</string>
+    <string name="weather_condition_snow">Snowy</string>
+    <string name="weather_condition_wind">Windy</string>
+    <string name="weather_condition_mist">Misty</string>
 </resources>
