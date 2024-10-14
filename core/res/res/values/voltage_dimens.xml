@@ -4,6 +4,11 @@
      SPDX-License-Identifier: Apache-2.0
 -->
 <resources>
+    <!-- Custom clocks -->
+    <dimen name="presentation_clock_text_size">50dp</dimen>
+    <dimen name="large_clock_text_size">150dp</dimen>
+    <dimen name="small_clock_text_size">86dp</dimen>
+
     <!-- Pocket Mode -->
     <dimen name="pocket_mode_illustration_width">175dp</dimen>
     <dimen name="pocket_mode_illustration_height">350dp</dimen>
