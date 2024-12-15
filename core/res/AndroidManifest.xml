@@ -9244,6 +9244,13 @@
         android:protectionLevel="internal|role"
         android:featureFlag="com.android.window.flags.enable_window_repositioning_api" />
 
+    <!--
+    START added non-runtime downstream permissions
+    -->
+    <!--
+    END added non-runtime downstream permissions
+    -->
+
     <!-- Attribution for Geofencing service. -->
     <attribution android:tag="GeofencingService" android:label="@string/geofencing_service"/>
     <!-- Attribution for Country Detector. -->
