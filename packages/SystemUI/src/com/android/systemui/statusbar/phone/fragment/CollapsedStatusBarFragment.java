@@ -649,9 +649,18 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
                     && shouldHideStatusBar()
                     && !(mStatusBarStateController.getState() == StatusBarState.KEYGUARD
                     && headsUpVisible)) {
-                return createHiddenModel();
+        View clockView = mClockController.getClock();
+            if (clockView != null) {
+                boolean isRightClock = clockView.getId() == R.id.clock_right;
+        return new StatusBarVisibilityModel(
+                        /* showClock= */ isRightClock,
+                        /* showNotificationIcons= */ false,
+                        /* showOngoingActivityChip= */ false,
+                        /* showSecondaryOngoingActivityChip= */ false,
+                        /* showSystemInfo= */ false);
             }
         }
+     }
 
         boolean showClock = externalModel.getShowClock() && !headsUpVisible;
 
@@ -670,16 +679,12 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
                         && StatusBarRonChips.isEnabled()
                         && mHasSecondaryOngoingActivity;
 
-        View clockView = mClockController.getClock();
-            if (clockView != null) {
-                boolean isRightClock = clockView.getId() == R.id.clock_right;
         return new StatusBarVisibilityModel(
-                        /* showClock= */ isRightClock,
-                        /* showNotificationIcons= */ false,
-                        /* showOngoingActivityChip= */ false,
-                        /* showSecondaryOngoingActivityChip= */ false,
-                        /* showSystemInfo= */ false);
-            }
+                showClock,
+                externalModel.getShowNotificationIcons(),
+                showPrimaryOngoingActivityChip && !headsUpVisible,
+                showSecondaryOngoingActivityChip && !headsUpVisible,
+                externalModel.getShowSystemInfo());
     }
 
     /**
