@@ -1182,7 +1182,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                         AlarmTimeout.MODE_IGNORE_IF_SCHEDULED);
             });
         }
-        MediaArtUtils.getInstance(mScrimBehind.getContext()).updateMediaArtVisibility();
+        com.android.systemui.util.ScrimUtils.getInstance(mScrimBehind.getContext()).onScrimDispatched();
     }
 
     /**
