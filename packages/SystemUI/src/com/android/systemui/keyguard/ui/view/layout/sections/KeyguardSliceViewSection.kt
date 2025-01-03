@@ -53,7 +53,7 @@ constructor(
             connect(
                 R.id.keyguard_slice_view,
                 ConstraintSet.START,
-                R.id.lockscreen_clock_view,
+                ConstraintSet.PARENT_ID,
                 ConstraintSet.START
             )
             connect(
