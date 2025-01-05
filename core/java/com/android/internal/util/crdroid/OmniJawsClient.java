@@ -54,7 +54,7 @@ public class OmniJawsClient {
             = Uri.parse("content://org.omnirom.omnijaws.provider/control");
 
     private static final String ICON_PACKAGE_DEFAULT = "org.omnirom.omnijaws";
-    private static final String ICON_PREFIX_DEFAULT = "google_new_light";
+    private static final String ICON_PREFIX_DEFAULT = "google";
     private static final String EXTRA_ERROR = "error";
     public static final int EXTRA_ERROR_NETWORK = 0;
     public static final int EXTRA_ERROR_LOCATION = 1;
@@ -428,5 +428,9 @@ public class OmniJawsClient {
             }
             mReceiver = null;
         }
+    }
+
+    public boolean isDefaultIconPackage() {
+        return mIconPrefix.equals(ICON_PREFIX_DEFAULT);
     }
 }
