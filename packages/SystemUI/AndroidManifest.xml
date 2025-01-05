@@ -394,9 +394,6 @@
     <!-- Pulse -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- OmniJaws -->
-    <uses-permission android:name="org.omnirom.omnijaws.READ_WEATHER" />
-
     <!-- To broadcast status of the GameSpaceManager -->
     <uses-permission android:name="android.permission.MANAGE_GAME_MODE" />
 
