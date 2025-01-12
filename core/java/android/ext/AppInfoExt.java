@@ -16,8 +16,6 @@ public final class AppInfoExt implements Parcelable {
     private final int flags;
 
     /** @hide */
-    public static final int FLAG_HAS_GMSCORE_CLIENT_LIBRARY = 0;
-
     public AppInfoExt(int packageId, int flags) {
         this.packageId = packageId;
         this.flags = flags;
@@ -34,7 +32,7 @@ public final class AppInfoExt implements Parcelable {
         return AppGlobals.getInitialPackageId();
     }
 
-    public boolean hasFlag(int flag) {
+    public boolean hasFlag(@AppInfoExtFlag.Enum int flag) {
         return (flags & (1 << flag)) != 0;
     }
 
