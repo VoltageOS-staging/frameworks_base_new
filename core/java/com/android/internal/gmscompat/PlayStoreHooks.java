@@ -28,6 +28,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.IntentSender;
 import android.content.pm.GosPackageState;
+import android.content.pm.GosPackageStateFlag;
 import android.content.pm.IPackageDataObserver;
 import android.content.pm.IPackageDeleteObserver;
 import android.content.pm.PackageInstaller;
@@ -316,8 +317,8 @@ switch (pkg) {
         String path = file.getPath();
 
         if (path.startsWith(obbDir) && !path.startsWith(playStoreObbDir)) {
-            GosPackageState ps = GosPackageState.get(GmsCompat.appContext().getPackageName());
-            boolean hasObbAccess = ps != null && ps.hasFlag(GosPackageState.FLAG_ALLOW_ACCESS_TO_OBB_DIRECTORY);
+            GosPackageState ps = GosPackageState.getForSelf(GmsCompat.appContext());
+            boolean hasObbAccess = ps.hasFlag(GosPackageStateFlag.ALLOW_ACCESS_TO_OBB_DIRECTORY);
 
             if (!hasObbAccess) {
                 try {
