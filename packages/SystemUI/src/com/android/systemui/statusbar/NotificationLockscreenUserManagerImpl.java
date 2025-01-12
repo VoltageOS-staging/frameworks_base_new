@@ -217,8 +217,8 @@ public class NotificationLockscreenUserManagerImpl implements
                 mBackgroundExecutor.execute(() -> {
                     initValuesForUser(userId);
                 });
-            } else if (profileAvailabilityActions(action)) {
-                updateCurrentProfilesCache();
+            } else if (profileAvailabilityActions(action) || Objects.equals(action,
+                    Intent.ACTION_PARALLEL_SPACE_CHANGED)) {
             } else if (Objects.equals(action, Intent.ACTION_USER_UNLOCKED)) {
                 if (!keyguardPrivateNotifications()) {
                     // Start the overview connection to the launcher service
@@ -247,8 +247,6 @@ public class NotificationLockscreenUserManagerImpl implements
                             .obtain(notificationKey, true);
                     mClickNotifier.onNotificationClick(notificationKey, nv);
                 }
-            } else if (Objects.equals(action, Intent.ACTION_PARALLEL_SPACE_CHANGED)) {
-                updateCurrentProfilesCache();
             }
         }
     };
@@ -422,11 +420,11 @@ public class NotificationLockscreenUserManagerImpl implements
         filter.addAction(Intent.ACTION_USER_UNLOCKED);
         filter.addAction(Intent.ACTION_MANAGED_PROFILE_AVAILABLE);
         filter.addAction(Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE);
-        filter.addAction(Intent.ACTION_PARALLEL_SPACE_CHANGED);
         if (privateSpaceFlagsEnabled()) {
             filter.addAction(Intent.ACTION_PROFILE_AVAILABLE);
             filter.addAction(Intent.ACTION_PROFILE_UNAVAILABLE);
         }
+        filter.addAction(Intent.ACTION_PARALLEL_SPACE_CHANGED);
         mBroadcastDispatcher.registerReceiver(mBaseBroadcastReceiver, filter,
                 null /* executor */, UserHandle.ALL);
 
