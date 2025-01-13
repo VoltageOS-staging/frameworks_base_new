@@ -7758,7 +7758,7 @@ public abstract class Context {
      * @hide
      */
     @NonNull
-    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @SystemApi
     @TestApi
     @android.ravenwood.annotation.RavenwoodSupported(
             type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
