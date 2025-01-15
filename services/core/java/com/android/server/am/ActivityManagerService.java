@@ -18069,7 +18069,7 @@ public class ActivityManagerService extends IActivityManager.Stub
         }
 
         @Override
-        public void onGosPackageStateChanged(int uid, @Nullable GosPackageState state) {
+        public void onGosPackageStateChanged(int uid, GosPackageState state) {
             synchronized (mProcLock) {
                 mProcessList.onGosPackageStateChangedLOSP(uid, state);
             }
