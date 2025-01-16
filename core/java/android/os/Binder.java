@@ -151,6 +151,11 @@ public class Binder implements IBinder {
     private static volatile boolean sStackTrackingEnabled = false;
 
     /**
+     * The extension binder object
+     */
+    private IBinder mExtension = null;
+
+    /**
      * Enable Binder IPC stack tracking. If enabled, every binder transaction will be logged to
      * {@link TransactionTracker}.
      *
@@ -1231,7 +1236,9 @@ public class Binder implements IBinder {
 
     /** @hide */
     @Override
-    public final native @Nullable IBinder getExtension();
+    public final @Nullable IBinder getExtension() {
+        return mExtension;
+    }
 
     /**
      * Set the binder extension.
@@ -1239,7 +1246,12 @@ public class Binder implements IBinder {
      *
      * @hide
      */
-    public final native void setExtension(@Nullable IBinder extension);
+    public final void setExtension(@Nullable IBinder extension) {
+        mExtension = extension;
+        setExtensionNative(extension);
+    }
+
+    private final native void setExtensionNative(@Nullable IBinder extension);
 
     /**
      * Default implementation rewinds the parcels and calls onTransact. On
