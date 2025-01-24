@@ -70,9 +70,6 @@ public final class PixelPropsUtils {
     private static final String sDeviceFingerprint =
             SystemProperties.get("ro.product.fingerprint", Build.FINGERPRINT);
 
-    private static final Boolean sEnablePixelProps =
-            Resources.getSystem().getBoolean(R.bool.config_enablePixelProps);
-
     private static final Map<String, Object> propsToChangeGeneric;
     private static final Map<String, Object> propsToChangeRecentPixel;
     private static final Map<String, Object> propsToChangePixelTablet;
@@ -145,6 +142,7 @@ public final class PixelPropsUtils {
         propsToChangeGeneric.put("TAGS", "release-keys");
         propsToChangeRecentPixel = new HashMap<>();
         propsToChangeRecentPixel.put("BRAND", "google");
+        propsToChangeRecentPixel.put("BOARD", "komodo");
         propsToChangeRecentPixel.put("MANUFACTURER", "Google");
         propsToChangeRecentPixel.put("DEVICE", "komodo");
         propsToChangeRecentPixel.put("PRODUCT", "komodo");
@@ -154,6 +152,7 @@ public final class PixelPropsUtils {
         propsToChangeRecentPixel.put("FINGERPRINT", "google/komodo/komodo:15/AP4A.250105.002/12701944:user/release-keys");
         propsToChangePixelTablet = new HashMap<>();
         propsToChangePixelTablet.put("BRAND", "google");
+        propsToChangePixelTablet.put("BOARD", "tangorpro");
         propsToChangePixelTablet.put("MANUFACTURER", "Google");
         propsToChangePixelTablet.put("DEVICE", "tangorpro");
         propsToChangePixelTablet.put("PRODUCT", "tangorpro");
@@ -248,6 +247,10 @@ public final class PixelPropsUtils {
         sProcessName = processName;
         sIsGms = packageName.equals(PACKAGE_GMS) && processName.equals(PROCESS_GMS_UNSTABLE);
         sIsExcluded = isGoogleCameraPackage(packageName);
+        String model = SystemProperties.get("ro.product.model");
+        boolean isPixelDevice = SystemProperties.get("ro.soc.manufacturer").equalsIgnoreCase("Google");
+        boolean isMainlineDevice = isPixelDevice && model.matches("Pixel [8-9][a-zA-Z ]*");
+        boolean isTensorDevice = isPixelDevice && model.matches("Pixel [6-9][a-zA-Z ]*");
         propsToChangeGeneric.forEach((k, v) -> setPropValue(k, v));
         if (packageName == null || processName == null || packageName.isEmpty()) {
             return;
@@ -264,9 +267,7 @@ public final class PixelPropsUtils {
                 }
             }
         } else if (Arrays.asList(packagesToChangeRecentPixel).contains(packageName)) {
-
-            boolean isTensorDevice = SystemProperties.get("ro.product.model").matches("Pixel [6-9][a-zA-Z ]*");
-            if (isTensorDevice || !sEnablePixelProps || !SystemProperties.getBoolean(SPOOF_PIXEL_PROPS, true)) {
+            if (isMainlineDevice || !SystemProperties.getBoolean(SPOOF_PIXEL_PROPS, true)) {
                 return;
             } else if (packageName.equals(PACKAGE_GMS) && !sIsGms) {
                 setPropValue("TIME", System.currentTimeMillis());
