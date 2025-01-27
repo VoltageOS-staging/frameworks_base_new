@@ -47,7 +47,6 @@ import org.xmlpull.v1.XmlPullParserException;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -143,24 +142,13 @@ public class SystemImpl implements SystemInterface {
      * */
     @Override
     public WebViewProviderInfo[] getWebViewPackages() {
-        return Arrays.stream(mWebViewProviderPackages)
-                .filter(x -> isProviderAvailable(x.packageName))
-                .toArray(WebViewProviderInfo[]::new);
+        return mWebViewProviderPackages;
     }
 
     public long getFactoryPackageVersion(String packageName) throws NameNotFoundException {
         PackageManager pm = mContext.getPackageManager();
         return pm.getPackageInfo(packageName, PackageManager.MATCH_FACTORY_ONLY)
                 .getLongVersionCode();
-    }
-
-    private boolean isProviderAvailable(String packageName) {
-        try {
-            getFactoryPackageVersion(packageName);
-            return true;
-        } catch (NameNotFoundException e) {
-            return false;
-        }
     }
 
     /**
