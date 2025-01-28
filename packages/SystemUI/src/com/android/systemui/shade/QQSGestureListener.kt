@@ -62,8 +62,7 @@ class QQSGestureListener @Inject constructor(
         if (e.actionMasked == MotionEvent.ACTION_UP &&
                 !statusBarStateController.isDozing &&
                 doubleTapToSleepEnabled &&
-                (e.getY() < quickQsOffsetHeight ||
-                    statusBarStateController.getState() == StatusBarState.KEYGUARD) &&
+                e.getY() < quickQsOffsetHeight &&
                 !falsingManager.isFalseDoubleTap
         ) {
             powerManager.goToSleep(e.getEventTime())
