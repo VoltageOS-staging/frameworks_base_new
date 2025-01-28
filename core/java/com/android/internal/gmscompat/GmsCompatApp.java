@@ -95,10 +95,6 @@ public final class GmsCompatApp {
             return cache;
         }
 
-        if (GmsCompat.isGmsCore()) {
-            throw new IllegalStateException();
-        }
-
         IBinder binder = getBinder(RPC_GET_BINDER_IClientOfGmsCore2Gca);
         IClientOfGmsCore2Gca iface = IClientOfGmsCore2Gca.Stub.asInterface(binder);
         // benign race, it's fine to obtain this interface more than once
