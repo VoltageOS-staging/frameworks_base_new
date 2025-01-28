@@ -13,4 +13,6 @@ interface IClientOfGmsCore2Gca {
     oneway void showMissingAppNotification(String pkgName);
 
     oneway void showPlayIntegrityNotification(String pkgName, boolean isBlocked);
+
+    oneway void onGoogleIdCredentialOptionInit();
 }
