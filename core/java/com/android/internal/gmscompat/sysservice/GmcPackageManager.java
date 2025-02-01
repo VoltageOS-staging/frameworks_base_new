@@ -397,14 +397,14 @@ public class GmcPackageManager extends ApplicationPackageManager {
             throw e;
         }
 
-        if (PackageId.ANDROID_AUTO_NAME.equals(packageName)) {
-            // Android Auto needs to be exempted from updates via Play Store to prevent breaking the
-            // compatibility layer support for Android Auto.
+        if (PackageId.ANDROID_AUTO_NAME.equals(packageName) || PackageId.GMS_CORE_NAME.equals(packageName)) {
+            // These packages need to be exempted from updates via Play Store to prevent breaking the
+            // compatibility layer.
             //
             // Play Store respects the value of InstallSourceInfo#getUpdateOwnerPackageName():
             // packages that have non-Play Store update owners are not updated by Play Store
             ContentResolver cr = GmsCompat.appContext().getContentResolver();
-            String updateOwnerPackage = PlayStoreHooks.isInstallAllowed(PackageId.ANDROID_AUTO_NAME, cr) ?
+            String updateOwnerPackage = PlayStoreHooks.isInstallAllowed(packageName, cr) ?
                     // Play Store tries to use installer session preapporaval when update ownership is
                     // set and Play Store is not the update owner. Installer session preapproval is
                     // disabled on GrapheneOS, which leads to installation failure. As a workaround,
