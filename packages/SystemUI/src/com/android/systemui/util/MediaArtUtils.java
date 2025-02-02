@@ -315,11 +315,6 @@ public class MediaArtUtils implements MediaSessionManagerHelper.MediaMetadataLis
         updateMedia();
     }
     
-    @Override
-    public void onMediaColorsChanged() {
-        updateMedia();
-    }
-    
     private class MediaArtObserver extends ContentObserver {
         public MediaArtObserver() {
             super(null);
