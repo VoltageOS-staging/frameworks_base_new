@@ -17,56 +17,61 @@
 
 package com.android.systemui.keyguard.ui.view.layout.sections
 
+import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import androidx.constraintlayout.widget.Barrier
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
+import com.android.systemui.customization.R as custR
 import com.android.systemui.keyguard.MigrateClocksToBlueprint
 import com.android.systemui.keyguard.shared.model.KeyguardSection
 import com.android.systemui.res.R
-import com.android.systemui.statusbar.lockscreen.LockscreenSmartspaceController
 import javax.inject.Inject
 
-class WeatherViewSection
+import com.android.systemui.weather.WeatherInfoView
+
+class KeyguardWeatherViewSection
 @Inject
 constructor(
-    val smartspaceController: LockscreenSmartspaceController,
+    private val context: Context,
 ) : KeyguardSection() {
     override fun addViews(constraintLayout: ConstraintLayout) {
         if (!MigrateClocksToBlueprint.isEnabled) return
-        if (smartspaceController.isEnabled) return
 
-        constraintLayout.findViewById<View?>(R.id.weather_container)?.let {
-            (it.parent as ViewGroup).removeView(it)
-            constraintLayout.addView(it)
+        constraintLayout.findViewById<WeatherInfoView?>(R.id.keyguard_weather_area)?.let { weatherArea ->
+            (weatherArea.parent as? ViewGroup)?.removeView(weatherArea)
+            constraintLayout.addView(weatherArea)
+            weatherArea.init()
         }
     }
+
     override fun bindData(constraintLayout: ConstraintLayout) {}
 
     override fun applyConstraints(constraintSet: ConstraintSet) {
         if (!MigrateClocksToBlueprint.isEnabled) return
-        if (smartspaceController.isEnabled) return
 
         constraintSet.apply {
             connect(
-                R.id.weather_container,
+                R.id.keyguard_weather_area,
                 ConstraintSet.START,
-                R.id.keyguard_slice_view,
-                ConstraintSet.START
+                ConstraintSet.PARENT_ID,
+                ConstraintSet.START,
+                context.resources.getDimensionPixelSize(custR.dimen.clock_padding_start) +
+                    context.resources.getDimensionPixelSize(R.dimen.status_view_margin_horizontal),
             )
             connect(
-                R.id.weather_container,
+                R.id.keyguard_weather_area,
                 ConstraintSet.END,
                 ConstraintSet.PARENT_ID,
                 ConstraintSet.END
             )
-            constrainHeight(R.id.weather_container, ConstraintSet.WRAP_CONTENT)
+            constrainHeight(R.id.keyguard_weather_area, ConstraintSet.WRAP_CONTENT)
 
             connect(
-                R.id.weather_container,
-                ConstraintSet.TOP,
                 R.id.keyguard_weather_area,
+                ConstraintSet.TOP,
+                R.id.keyguard_slice_view,
                 ConstraintSet.BOTTOM
             )
 
@@ -74,15 +79,15 @@ constructor(
                 R.id.smart_space_barrier_bottom,
                 Barrier.BOTTOM,
                 0,
-                *intArrayOf(R.id.weather_container)
+                *intArrayOf(R.id.keyguard_weather_area)
             )
         }
     }
 
     override fun removeViews(constraintLayout: ConstraintLayout) {
-        if (!MigrateClocksToBlueprint.isEnabled) return
-        if (!smartspaceController.isEnabled) return
-
-        constraintLayout.removeView(R.id.weather_container)
+        constraintLayout.findViewById<WeatherInfoView?>(R.id.keyguard_weather_area)?.let { weatherArea ->
+            weatherArea.cleanup()
+        }
     }
 }
+
