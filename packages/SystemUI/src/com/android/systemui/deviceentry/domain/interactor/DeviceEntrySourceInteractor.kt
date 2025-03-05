@@ -126,7 +126,7 @@ constructor(
                 currentScene,
                 isShowingBouncerScene ->
                 val isUnlockingAllowed =
-                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(isFaceStrongBiometric)
+                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(isFaceStrongBiometric)
                 val bypass = isBypassAvailable || authController.isUdfpsFingerDown()
 
                 when {
@@ -169,7 +169,7 @@ constructor(
                 isFingerprintStrongBiometric,
                 isShowingBouncerScene ->
                 val unlockingAllowed =
-                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
+                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
                         isFingerprintStrongBiometric
                     )
                 when {
