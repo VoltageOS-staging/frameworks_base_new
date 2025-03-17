@@ -23,6 +23,7 @@ import android.graphics.Insets;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Display;
 import android.view.DisplayCutout;
 import android.view.MotionEvent;
 import android.view.Surface;

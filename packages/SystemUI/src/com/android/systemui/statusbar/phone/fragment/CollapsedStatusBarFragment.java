@@ -86,6 +86,7 @@ import com.android.systemui.util.CarrierConfigTracker;
 import com.android.systemui.util.CarrierConfigTracker.CarrierConfigChangedListener;
 import com.android.systemui.util.CarrierConfigTracker.DefaultDataSubscriptionChangedListener;
 import com.android.systemui.util.settings.SecureSettings;
+import com.android.systemui.tuner.TunerService;
 
 import kotlin.Unit;
 
@@ -109,7 +110,7 @@ import javax.inject.Inject;
 @SuppressLint("ValidFragment")
 public class CollapsedStatusBarFragment extends Fragment implements CommandQueue.Callbacks,
         StatusBarStateController.StateListener,
-        SystemStatusAnimationCallback, Dumpable {
+        SystemStatusAnimationCallback, Dumpable, TunerService.Tunable {
 
     public static final String TAG = "CollapsedStatusBarFragment";
     private static final String EXTRA_PANEL_STATE = "panel_state";
@@ -150,6 +151,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
     private final HomeStatusBarViewBinder mHomeStatusBarViewBinder;
     private final StatusBarHideIconsForBouncerManager mStatusBarHideIconsForBouncerManager;
     private final DarkIconManager.Factory mDarkIconManagerFactory;
+    private final TunerService mTunerService;
     private final SecureSettings mSecureSettings;
     private final Executor mMainExecutor;
     private final DumpManager mDumpManager;
@@ -262,6 +264,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
             CarrierConfigTracker carrierConfigTracker,
             CollapsedStatusBarFragmentLogger collapsedStatusBarFragmentLogger,
             OperatorNameViewController.Factory operatorNameViewControllerFactory,
+            TunerService tunerService,
             SecureSettings secureSettings,
             @Main Executor mainExecutor,
             DumpManager dumpManager,
@@ -285,6 +288,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         mCarrierConfigTracker = carrierConfigTracker;
         mCollapsedStatusBarFragmentLogger = collapsedStatusBarFragmentLogger;
         mOperatorNameViewControllerFactory = operatorNameViewControllerFactory;
+        mTunerService = tunerService;
         mSecureSettings = secureSettings;
         mMainExecutor = mainExecutor;
         mDumpManager = dumpManager;
@@ -502,6 +506,10 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
             mNicBindingDisposable.dispose();
             mNicBindingDisposable = null;
         }
+    }
+
+    @Override
+    public void onTuningChanged(String key, String newValue) {
     }
 
     /** Initializes views related to the notification icon area. */
