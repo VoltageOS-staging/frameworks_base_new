@@ -33,6 +33,7 @@ import androidx.core.graphics.ColorUtils
 
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.keyguard.WakefulnessLifecycle
+import com.android.systemui.res.R;
 
 import java.io.File
 import java.io.IOException

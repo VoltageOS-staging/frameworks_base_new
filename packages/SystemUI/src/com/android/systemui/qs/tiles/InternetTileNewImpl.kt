@@ -96,9 +96,14 @@ constructor(
     }
 
     override fun handleClick(expandable: Expandable?, keyguardShowing: Boolean) {
-        if (QsDetailedView.isEnabled, keyguardShowing) {
+        if (QsDetailedView.isEnabled) {
             return
         }
+
+        if (checkKeyguard(expandable, keyguardShowing)) {
+             return
+         }
+
         mainHandler.post {
             internetDialogManager.create(
                 aboveStatusBar = true,

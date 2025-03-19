@@ -47,6 +47,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.android.systemui.res.R;
+
 public class CPUInfoService extends Service {
     private View mView;
     private Thread mCurCPUThread;
