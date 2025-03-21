@@ -354,6 +354,7 @@ public class KeyguardClockSwitchController extends ViewController<KeyguardClockS
                 }
             }
         }
+    );
         if (!MigrateClocksToBlueprint.isEnabled()) {
             setDateWeatherVisibility();
             setWeatherVisibility();
