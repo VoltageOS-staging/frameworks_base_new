@@ -24,12 +24,6 @@
     <!-- Whether device supports an alt. ambient display -->
     <bool name="config_alt_ambient_display">false</bool>
 
-    <!-- Define device configs on boot -->
-    <string-array name="global_device_configs_override" translatable="false">
-    </string-array>
-    <string-array name="device_configs_override" translatable="false">
-    </string-array>
-
     <!-- The list of package IDs that are allowed to use aux cameras.
          NOTE: If this list is empty then all apps will be able to use aux cameras. -->
     <string-array name="config_cameraAuxPackageAllowList" translatable="false" />
