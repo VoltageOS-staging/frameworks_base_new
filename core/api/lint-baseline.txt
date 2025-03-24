@@ -441,6 +441,10 @@ MissingGetterMatchingBuilder: android.os.RemoteCallbackList.Builder#setInterface
     android.os.RemoteCallbackList does not declare a `getInterfaceDiedCallback()` method matching method android.os.RemoteCallbackList.Builder.setInterfaceDiedCallback(android.os.RemoteCallbackList.Builder.InterfaceDiedCallback<E>)
 
 
+NoSettingsProvider: android.provider.Settings.System#ENABLE_TASKBAR:
+    New setting keys are not allowed (Field: ENABLE_TASKBAR); use getters/setters in relevant manager class
+
+
 OnNameExpected: android.service.quickaccesswallet.QuickAccessWalletService#getGestureTargetActivityPendingIntent():
     If implemented by developer, should follow the on<Something> style; otherwise consider marking final
 
@@ -1549,6 +1553,8 @@ UnflaggedApi: android.provider.Settings#ACTION_CREDENTIAL_PROVIDER:
     New API must be flagged with @FlaggedApi: field android.provider.Settings.ACTION_CREDENTIAL_PROVIDER
 UnflaggedApi: android.provider.Settings.Secure#TETHERING_ALLOW_VPN_UPSTREAMS:
     New API must be flagged with @FlaggedApi: field android.provider.Settings.Secure.TETHERING_ALLOW_VPN_UPSTREAMS
+UnflaggedApi: android.provider.Settings.System#ENABLE_TASKBAR:
+    New API must be flagged with @FlaggedApi: field android.provider.Settings.System.ENABLE_TASKBAR
 UnflaggedApi: android.telecom.Call.Details#getId():
     New API must be flagged with @FlaggedApi: method android.telecom.Call.Details.getId()
 UnflaggedApi: android.telephony.PhoneNumberUtils#isWpsCallNumber(String):
@@ -1665,6 +1671,7 @@ UnflaggedApi: android.view.inputmethod.InputMethodManager#hideSoftInputFromWindo
     Changes from not deprecated to deprecated must be flagged with @FlaggedApi: method android.view.inputmethod.InputMethodManager.hideSoftInputFromWindow(android.os.IBinder,int,android.os.ResultReceiver)
 UnflaggedApi: android.view.inputmethod.InputMethodManager#showSoftInput(android.view.View, int, android.os.ResultReceiver):
     Changes from not deprecated to deprecated must be flagged with @FlaggedApi: method android.view.inputmethod.InputMethodManager.showSoftInput(android.view.View,int,android.os.ResultReceiver)
+
 
 UserHandleName: android.service.notification.NotificationListenerService#createConversationNotificationChannelForPackage(String, android.os.UserHandle, String, String):
     Method taking UserHandle should be named `doFooAsUser` or `queryFooForUser`, was `createConversationNotificationChannelForPackage`
