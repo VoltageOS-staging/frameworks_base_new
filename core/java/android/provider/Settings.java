@@ -14291,6 +14291,7 @@ public final class Settings {
                 "allow_automatic_pkg_hardening_config"; // historical name
 
         /** @hide */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String AUTO_REBOOT_TIMEOUT = "settings_reboot_after_timeout";
 
         /** @hide */
