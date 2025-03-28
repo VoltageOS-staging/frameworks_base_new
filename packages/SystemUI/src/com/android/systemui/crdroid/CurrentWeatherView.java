@@ -226,10 +226,10 @@ public class CurrentWeatherView extends FrameLayout implements OmniJawsClient.Om
                     1, UserHandle.USER_CURRENT) != 0;
             mShowWindInfo = Settings.System.getIntForUser(mContext.getContentResolver(),
                     Settings.System.LOCKSCREEN_WEATHER_WIND_INFO,
-                    1, UserHandle.USER_CURRENT) != 0;
+                    0, UserHandle.USER_CURRENT) != 0;
             mShowHumidityInfo = Settings.System.getIntForUser(mContext.getContentResolver(),
                     Settings.System.LOCKSCREEN_WEATHER_HUMIDITY_INFO,
-                    1, UserHandle.USER_CURRENT) != 0;
+                    0, UserHandle.USER_CURRENT) != 0;
             mLeftText.setVisibility(mShowWeatherLocation ? View.VISIBLE : View.GONE);
             mWeatherText.setVisibility(mShowWeatherText ? View.VISIBLE : View.GONE);
             mWindInfoImage.setVisibility(mShowWindInfo ? View.VISIBLE : View.GONE);
