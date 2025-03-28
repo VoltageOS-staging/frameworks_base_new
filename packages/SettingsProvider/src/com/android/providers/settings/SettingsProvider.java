@@ -2332,7 +2332,7 @@ public class SettingsProvider extends ContentProvider {
         String callingPackage = getCallingPackage();
         if (callingPackage == null) {
             if (Build.IS_DEBUGGABLE) {
-                if (Binder.getCallingUid() == 0) {
+                if (Binder.getCallingUid() == ROOT_UID) {
                     Slog.d(LOG_TAG, "allowed root to access protected setting " + protSetting.key());
                     return;
                 }
