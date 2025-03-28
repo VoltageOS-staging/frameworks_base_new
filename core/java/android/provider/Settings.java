@@ -14304,6 +14304,7 @@ public final class Settings {
         public static final String WIDEVINE_PROVISIONING_SERVER = "widevine_provisioner_server";
 
         /** @hide */
+        @Protected(restrictReads = false, readWrite = KnownSystemPackage.SETTINGS)
         public static final String NETWORK_LOCATION = "network_location";
 
         // ExtSettings END
