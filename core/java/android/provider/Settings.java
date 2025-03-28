@@ -14288,6 +14288,7 @@ public final class Settings {
         public static final String AUTO_REBOOT_TIMEOUT = "settings_reboot_after_timeout";
 
         /** @hide */
+        @Protected(readWrite = KnownSystemPackage.SETTINGS)
         public static final String WIFI_AUTO_OFF = "wifi_off_timeout";
 
         /** @hide */
