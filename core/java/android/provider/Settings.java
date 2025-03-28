@@ -14248,6 +14248,7 @@ public final class Settings {
         // ExtSettings BEGIN
 
         /** @hide */
+        @Protected(restrictReads = false, readWrite = KnownSystemPackage.SETTINGS)
         public static final String ALLOW_DISABLING_HARDENING_VIA_APP_COMPAT_CONFIG =
                 "allow_automatic_pkg_hardening_config"; // historical name
 
