@@ -4091,18 +4091,46 @@ public final class Settings {
     @Target({ ElementType.FIELD })
     @Retention(RetentionPolicy.RUNTIME)
     private @interface Protected {
+        // read() and readWrite() are required to be empty if immutableValue is non-empty
+        String immutableValue() default "";
+        // Ignored if immutableValue is non-empty
         boolean restrictReads() default true;
-        // IDs of system packages that are allowed read-only access. Ignored if restrictReads is false.
+        // IDs of system packages that are allowed read-only access. Should be empty if
+        // immutableValue is non-empty or restrictReads is false.
         @KnownSystemPackage.Enum int[] read() default {};
-        // IDs of system packages that are allowed read and write access
-        @KnownSystemPackage.Enum int[] readWrite();
+        // IDs of system packages that are allowed read and write access. Should be empty if
+        // immutableValue is non-empty
+        @KnownSystemPackage.Enum int[] readWrite() default {};
     }
 
     /** @hide */
     public record ProtectedSetting(String key,
+                                   @Nullable String immutableValue,
                                    boolean restrictReads,
                                    @KnownSystemPackage.Enum int[] readableBy,
-                                   @KnownSystemPackage.Enum int[] readWritableBy) {}
+                                   @KnownSystemPackage.Enum int[] readWritableBy) {
+
+        static ProtectedSetting fromAnnotation(String key, Protected anno) {
+            int[] readableBy = anno.read();
+            int[] readWritableBy = anno.readWrite();
+
+            String immutableValue = anno.immutableValue();
+            if (!immutableValue.isEmpty()) {
+                if (readableBy.length != 0 || readWritableBy.length != 0) {
+                    throw new IllegalArgumentException(key);
+                }
+                return new ProtectedSetting(key, immutableValue, false, readableBy, readWritableBy);
+            }
+
+            boolean restrictReads = anno.restrictReads();
+            if (!restrictReads && readableBy.length != 0) {
+                throw new IllegalArgumentException(key);
+            }
+
+            return new ProtectedSetting(key, null, anno.restrictReads(),
+                    readableBy, readWritableBy);
+        }
+    }
 
     private static <T extends NameValueTable> void getPublicSettingsForClass(
             Class<T> callerClass, Set<String> allKeys, Set<String> readableKeys,
@@ -4134,9 +4162,7 @@ public final class Settings {
                 if (protectedSettings != null) {
                     final Protected anno = field.getAnnotation(Protected.class);
                     if (anno != null) {
-                        var setting = new ProtectedSetting(key, anno.restrictReads(),
-                                anno.read(), anno.readWrite());
-                        protectedSettings.put(key, setting);
+                        protectedSettings.put(key, ProtectedSetting.fromAnnotation(key, anno));
                     }
                 }
             }
