@@ -2221,12 +2221,22 @@ UnflaggedApi: android.ext.DerivedPackageFlag#HAS_WRITE_CONTACTS_DECLARATION:
     New API must be flagged with @FlaggedApi: field android.ext.DerivedPackageFlag.HAS_WRITE_CONTACTS_DECLARATION
 UnflaggedApi: android.ext.DerivedPackageFlag#HAS_WRITE_EXTERNAL_STORAGE_DECLARATION:
     New API must be flagged with @FlaggedApi: field android.ext.DerivedPackageFlag.HAS_WRITE_EXTERNAL_STORAGE_DECLARATION
+UnflaggedApi: android.ext.KnownSystemPackage:
+    New API must be flagged with @FlaggedApi: class android.ext.KnownSystemPackage
+UnflaggedApi: android.ext.KnownSystemPackage#SETTINGS:
+    New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackage.SETTINGS
+UnflaggedApi: android.ext.KnownSystemPackage#SHELL:
+    New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackage.SHELL
+UnflaggedApi: android.ext.KnownSystemPackage#SYSTEM_UI:
+    New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackage.SYSTEM_UI
 UnflaggedApi: android.ext.KnownSystemPackages:
     New API must be flagged with @FlaggedApi: class android.ext.KnownSystemPackages
 UnflaggedApi: android.ext.KnownSystemPackages#contactsProvider:
     New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackages.contactsProvider
 UnflaggedApi: android.ext.KnownSystemPackages#get(android.content.Context):
     New API must be flagged with @FlaggedApi: method android.ext.KnownSystemPackages.get(android.content.Context)
+UnflaggedApi: android.ext.KnownSystemPackages#getById(int):
+    New API must be flagged with @FlaggedApi: method android.ext.KnownSystemPackages.getById(int)
 UnflaggedApi: android.ext.KnownSystemPackages#launcher:
     New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackages.launcher
 UnflaggedApi: android.ext.KnownSystemPackages#mediaProvider:
@@ -2235,6 +2245,8 @@ UnflaggedApi: android.ext.KnownSystemPackages#permissionController:
     New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackages.permissionController
 UnflaggedApi: android.ext.KnownSystemPackages#settings:
     New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackages.settings
+UnflaggedApi: android.ext.KnownSystemPackages#shell:
+    New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackages.shell
 UnflaggedApi: android.ext.KnownSystemPackages#systemUi:
     New API must be flagged with @FlaggedApi: field android.ext.KnownSystemPackages.systemUi
 UnflaggedApi: android.ext.PackageId:
