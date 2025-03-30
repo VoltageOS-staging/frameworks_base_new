@@ -3356,6 +3356,33 @@ public class SettingsProvider extends ContentProvider {
             // Upgrade the settings to the latest version.
             UpgradeController upgrader = new UpgradeController(userId);
             upgrader.upgradeIfNeededLocked();
+
+            // Init immutable settings
+            int[] typesToInit = userId == UserHandle.USER_SYSTEM ?
+                    new int[] { SETTINGS_TYPE_GLOBAL, SETTINGS_TYPE_SECURE, SETTINGS_TYPE_SYSTEM, } :
+                    new int[] { SETTINGS_TYPE_SECURE, };
+
+            for (int type : typesToInit) {
+                SettingsState settingsState = SettingsRegistry.this.getSettingsLocked(type, userId);
+                ArrayMap<String, Settings.ProtectedSetting> protectedSettings = getProtectedSettings(type);
+                String typeStr = SettingsState.settingTypeToString(type);
+                if (type == SETTINGS_TYPE_SECURE) {
+                    typeStr += " (user " + userId + ")";
+                }
+                for (int i = 0; i < protectedSettings.size(); ++i) {
+                    Settings.ProtectedSetting setting = protectedSettings.valueAt(i);
+                    String immutableValue = setting.immutableValue();
+                    if (immutableValue == null) {
+                        continue;
+                    }
+                    settingsState.insertSettingLocked(setting.key(), immutableValue,
+                            /* tag */ null, /* makeDefault */ false,
+                            SettingsState.SYSTEM_PACKAGE_NAME);
+
+                    Slog.d(LOG_TAG, typeStr + ": initialized " + setting.key()
+                            + " with immutable value " + immutableValue);
+                }
+            }
             return true;
         }
 
