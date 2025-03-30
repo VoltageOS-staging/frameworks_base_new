@@ -19103,7 +19103,6 @@ public final class Settings {
          * @hide
          */
         @Readable
-        @Protected(restrictReads = false, readWrite = {})
         public static final String ENABLE_EPHEMERAL_FEATURE = "enable_ephemeral_feature";
 
         /**
