@@ -253,7 +253,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     // Combined scrim behind keyguard alpha of default scrim + additional scrim
     private float mScrimBehindAlphaKeyguard = 0f;
 
-    static final float TRANSPARENT_BOUNCER_SCRIM_ALPHA = 0.54f;
+    public static final float TRANSPARENT_BOUNCER_SCRIM_ALPHA = 0.54f;
 
     private float mRawPanelExpansionFraction;
     private float mPanelScrimMinFraction;
@@ -305,7 +305,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     private boolean mIsBouncerToGoneTransitionRunning = false;
     private PrimaryBouncerToGoneTransitionViewModel mPrimaryBouncerToGoneTransitionViewModel;
     private AlternateBouncerToGoneTransitionViewModel mAlternateBouncerToGoneTransitionViewModel;
-    private final Consumer<ScrimAlpha> mScrimAlphaConsumer =
+    private final Consumer<ScrimAlpha> mBouncerToGoneScrimAlphaConsumer =
             (ScrimAlpha alphas) -> {
                 mInFrontAlpha = alphas.getFrontAlpha();
                 mScrimInFront.setViewAlpha(mInFrontAlpha);
@@ -491,7 +491,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                 Edge.Companion.create(PRIMARY_BOUNCER, GONE)),
                 mBouncerToGoneTransition, mMainDispatcher);
         collectFlow(behindScrim, mPrimaryBouncerToGoneTransitionViewModel.getScrimAlpha(),
-                mScrimAlphaConsumer, mMainDispatcher);
+                mBouncerToGoneScrimAlphaConsumer, mMainDispatcher);
 
         // ALTERNATE_BOUNCER->GONE
         collectFlow(behindScrim, mKeyguardTransitionInteractor.transition(
@@ -499,7 +499,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                 Edge.Companion.create(ALTERNATE_BOUNCER, GONE)),
                 mBouncerToGoneTransition, mMainDispatcher);
         collectFlow(behindScrim, mAlternateBouncerToGoneTransitionViewModel.getScrimAlpha(),
-                mScrimAlphaConsumer, mMainDispatcher);
+                mBouncerToGoneScrimAlphaConsumer, mMainDispatcher);
 
         // LOCKSCREEN<->GLANCEABLE_HUB
         collectFlow(
