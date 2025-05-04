@@ -25,6 +25,9 @@ import android.annotation.SuppressLint;
 import android.app.compat.gms.GmsCompat;
 import android.content.ComponentName;
 import android.content.Context;
+// *** Import PackageManager and ApplicationInfo ***
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.ext.PackageId;
 import android.os.Bundle;
 import android.os.Parcel;
@@ -46,6 +49,9 @@ import java.util.Set;
  * CredentialManager#getCredential} operation.
  */
 public final class CredentialOption implements Parcelable {
+
+    // *** Add a TAG for logging ***
+    private static final String TAG = "CredentialOption";
 
     /**
      * Bundle key to the list of elements keys supported/requested. Framework will use this key
@@ -286,30 +292,72 @@ public final class CredentialOption implements Parcelable {
         /**
          * Sets a true/false value corresponding to whether this option must be serviced by
          * system credentials providers only.
+         *
+         * This method includes GmsCompat logic: if the type is for Google ID tokens and
+         * GmsCompat is enabled for a non-system GMS Core, it forces this value to false.
          */
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setIsSystemProviderRequired(boolean isSystemProviderRequired) {
+            // Check specifically for Google ID token type and if the app requested a system provider
             String typeGoogleId = "com.google.android.libraries.identity.googleid.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL";
             if (isSystemProviderRequired && mType.equals(typeGoogleId)) {
                 Context appContext = GmsCompat.appContext();
                 String gmscorePkg = PackageId.GMS_CORE_NAME;
-                if (appContext != null && GmsCompat.isEnabledFor(gmscorePkg, appContext.getUserId())) {
-                    Log.d("GmsCompat", "ignored CredentialOption.setIsSystemProviderRequired(true) for " +
-                            "TYPE_GOOGLE_ID_TOKEN_CREDENTIAL", new Throwable());
-                    mIsSystemProviderRequired = false;
 
+                // Check if GmsCompat context is available and GmsCompat is enabled for GMS Core
+                if (appContext != null && GmsCompat.isEnabledFor(gmscorePkg, appContext.getUserId())) {
+                    // GmsCompat is active for GMS Core. Now check if GMS Core is actually a system app.
+                    PackageManager pm = appContext.getPackageManager();
+                    boolean isGmsSystemApp = false; // Default to false
                     try {
-                        GmsCompatApp.iClientOfGmsCore2Gca().onGoogleIdCredentialOptionInit();
-                    } catch (RemoteException e) {
-                        throw GmsCompatApp.callFailed(e);
+                        ApplicationInfo gmsAppInfo = pm.getApplicationInfo(gmscorePkg, PackageManager.GET_META_DATA); // Use flags if needed
+                        isGmsSystemApp = (gmsAppInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+                        Log.d(TAG, "GMS Core (" + gmscorePkg + ") system status: " + isGmsSystemApp);
+                    } catch (PackageManager.NameNotFoundException e) {
+                        // GMS Core not found, unlikely if GmsCompat.isEnabledFor was true, but handle anyway
+                        Log.w(TAG, "GMS Core package " + gmscorePkg + " not found, cannot determine system status.");
+                        // Proceed as if it's not system, or let the original value pass through?
+                        // Let's assume non-system if not found here.
+                        isGmsSystemApp = false;
                     }
-                    return this;
+
+                    // *** The core GmsCompat logic ***
+                    // If GmsCompat is enabled AND GMS Core is NOT a system app (i.e., deprivileged)
+                    if (!isGmsSystemApp) {
+                        // Force isSystemProviderRequired to false because deprivileged GMS cannot fulfill it.
+                        Log.i(TAG, "GmsCompat overriding setIsSystemProviderRequired(true) to false for "
+                                + typeGoogleId + " because GMS Core is deprivileged.");
+                        mIsSystemProviderRequired = false; // Override the app's request
+
+                        // Notify GmsCompatApp service (optional, keep if needed for your compat logic)
+                        try {
+                            GmsCompatApp.iClientOfGmsCore2Gca().onGoogleIdCredentialOptionInit();
+                        } catch (RemoteException e) {
+                            // Log or handle the exception from the AIDL call
+                            Log.e(TAG, "Failed to notify GmsCompatApp about GoogleIdCredentialOptionInit", e);
+                            // Decide if this should throw a runtime exception or just log
+                            // throw GmsCompatApp.callFailed(e); // Uncomment if failure should halt execution
+                        }
+                        return this; // Exit early, we've set the overridden value
+                    } else {
+                        // GmsCompat is enabled, BUT GMS Core IS a system app (privileged).
+                        // In this case, we should respect the app's request.
+                        Log.d(TAG, "GmsCompat active, but GMS Core is system. Honoring setIsSystemProviderRequired(" + isSystemProviderRequired + ")");
+                        // Fall through to set the value requested by the app below.
+                    }
+                } else {
+                    // GmsCompat is not active for GMS Core. Respect the app's request.
+                    Log.d(TAG, "GmsCompat not active for GMS Core. Honoring setIsSystemProviderRequired(" + isSystemProviderRequired + ")");
+                    // Fall through to set the value requested by the app below.
                 }
             }
+
+            // Set the value requested by the app (or the original value if the GmsCompat override didn't apply)
             mIsSystemProviderRequired = isSystemProviderRequired;
             return this;
         }
+
 
         /**
          * Adds a provider {@link ComponentName} to be queried while gathering credentials from
@@ -363,6 +411,7 @@ public final class CredentialOption implements Parcelable {
          */
         @NonNull
         public CredentialOption build() {
+            // The mIsSystemProviderRequired value used here is the one potentially modified by setIsSystemProviderRequired
             return new CredentialOption(mType, mCredentialRetrievalData, mCandidateQueryData,
                     mIsSystemProviderRequired, mAllowedProviders);
         }
