@@ -2512,4 +2512,8 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             }
         }
     }
+    
+    public boolean isVisible() {
+        return mVisible;
+    }
 }

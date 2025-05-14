@@ -361,4 +361,6 @@ public interface CentralSurfaces extends Dumpable, LifecycleOwner, CoreStartable
             ExpandableNotificationRow associatedView);
 
     GameSpaceManager getGameSpaceManager();
+
+    default void unlockedScreenOffAnimationCancel() {}
 }
