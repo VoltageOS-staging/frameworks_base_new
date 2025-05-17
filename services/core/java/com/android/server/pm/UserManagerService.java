@@ -687,7 +687,7 @@ public class UserManagerService extends IUserManager.Stub {
                     + "preference is set to %d", privateSpaceAutoLockPreference);
             return;
         }
-        int privateProfileUserId = getPrivateProfileUserId();
+        int privateProfileUserId = getPrivateProfileUserId(getMainUserIdUnchecked());
         if (privateProfileUserId != UserHandle.USER_NULL) {
             if (isQuietModeEnabled(privateProfileUserId)) {
                 Slogf.d(LOG_TAG, "Not scheduling auto-lock alarm for %d, "
@@ -769,7 +769,7 @@ public class UserManagerService extends IUserManager.Stub {
     @RequiresPermission(Manifest.permission.SUBSCRIBE_TO_KEYGUARD_LOCKED_STATE)
     void setOrUpdateAutoLockPreferenceForPrivateProfile(
             @Settings.Secure.PrivateSpaceAutoLockOption int autoLockPreference) {
-        int privateProfileUserId = getPrivateProfileUserId();
+        int privateProfileUserId = getPrivateProfileUserId(getMainUserIdUnchecked());
         if (privateProfileUserId == UserHandle.USER_NULL) {
             Slog.e(LOG_TAG, "Auto-lock preference updated but private space user not found");
             return;
@@ -832,7 +832,7 @@ public class UserManagerService extends IUserManager.Stub {
 
     @VisibleForTesting
     void autoLockPrivateSpace() {
-        int privateProfileUserId = getPrivateProfileUserId();
+        int privateProfileUserId = getPrivateProfileUserId(getMainUserIdUnchecked());
         if (privateProfileUserId != UserHandle.USER_NULL) {
             Slog.i(LOG_TAG, "Auto-locking private space with user-id "
                     + privateProfileUserId);
@@ -1380,13 +1380,16 @@ public class UserManagerService extends IUserManager.Stub {
     }
 
 
-    private @CanBeNULL @UserIdInt int getPrivateProfileUserId() {
+    // Only supported number of private profiles in a user is 1.
+    private @CanBeNULL @UserIdInt int getPrivateProfileUserId(@UserIdInt int parentUserId) {
+        if (parentUserId == UserHandle.USER_NULL) {
+            return UserHandle.USER_NULL;
+        }
         synchronized (mUsersLock) {
-            for (int userId : getUserIds()) {
-                UserInfo userInfo = getUserInfoLU(userId);
-                if (userInfo != null && userInfo.isPrivateProfile()) {
-                    return userInfo.id;
-                }
+            IntArray privateProfiles = getProfileIdsLU(parentUserId, USER_TYPE_PROFILE_PRIVATE,
+                    true, false);
+            if (privateProfiles.size() == 1) {
+                return privateProfiles.get(0);
             }
         }
         return UserHandle.USER_NULL;
