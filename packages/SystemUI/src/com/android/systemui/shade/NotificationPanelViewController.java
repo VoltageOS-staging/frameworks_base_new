@@ -1548,6 +1548,38 @@ public final class NotificationPanelViewController implements
         setExpandedHeight(0.0f);
     }
 
+    private final boolean shouldIgnoreStartFlingAnimavor(ValueAnimator newAnimator, ValueAnimator oldAnimator, float vel, boolean expand) {
+        if (newAnimator == null) {
+            return false;
+        }
+        if (oldAnimator != null 
+            && oldAnimator.equals(lastFlingToHeightAnimator) 
+            && isSameDirection(vel) 
+            && expand == lastFlingToHeightExpand 
+            && oldAnimator.isRunning()) {
+            return true;
+        }
+        lastFlingToHeightAnimator = newAnimator;
+        lastFlingToHeightVel = vel;
+        lastFlingToHeightExpand = expand;
+        return false;
+    }
+
+    private final boolean isSameDirection(float vel) {
+        return (vel <= 0.0f && lastFlingToHeightVel <= 0.0f) || (vel >= 0.0f && lastFlingToHeightVel >= 0.0f);
+    }
+
+    public void stopHeightAnimator() {
+        if (mHeightAnimator == null || !mHeightAnimator.isRunning()) {
+            return;
+        }
+        mHeightAnimator.cancel();
+    }
+
+    public void resetHeightForBouncerShowing() {
+        setExpandedHeight(0.0f);
+    }
+
     @VisibleForTesting
     void onFlingEnd(boolean cancelled) {
         mIsFlinging = false;
