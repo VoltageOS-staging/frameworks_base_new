@@ -8444,7 +8444,8 @@ public class AppOpsManager {
         }
         final List<AppOpsManager.PackageOps> result;
         try {
-            result = mService.getPackagesForOpsForDevice(opCodes, persistentDeviceId);
+            var listSlice = mService.getPackagesForOpsForDevice(opCodes, persistentDeviceId);
+            result = listSlice != null ? listSlice.getList() : null;
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -8467,8 +8468,9 @@ public class AppOpsManager {
     @UnsupportedAppUsage
     public List<AppOpsManager.PackageOps> getPackagesForOps(int[] ops) {
         try {
-            return mService.getPackagesForOpsForDevice(ops,
+            var listSlice = mService.getPackagesForOpsForDevice(ops,
                     VirtualDeviceManager.PERSISTENT_DEVICE_ID_DEFAULT);
+            return listSlice != null ? listSlice.getList() : null;
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
