@@ -133,13 +133,16 @@ static jobject native_create(JNIEnv* env, std::unique_ptr<SkStream> stream,
         switch (result) {
             case SkCodec::kIncompleteInput:
                 return throw_exception(env, kSourceIncomplete, "", nullptr, source);
+            case SkCodec::kUnimplemented:
+                ALOGD("ImageDecoder: SkCodec failed with 'unimplemented'. Check image asset format.");
+                return nullptr;
+
             default:
                 SkString msg;
                 msg.printf("Failed to create image decoder with message '%s'",
                            SkCodec::ResultToString(result));
                 return throw_exception(env, kSourceMalformedData,  msg.c_str(),
                                        nullptr, source);
-
         }
     }
 
