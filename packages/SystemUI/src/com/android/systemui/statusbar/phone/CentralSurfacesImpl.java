@@ -53,12 +53,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Point;
 import android.hardware.devicestate.DeviceStateManager;
 import android.metrics.LogMaker;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.Looper;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.RemoteException;
@@ -67,6 +69,7 @@ import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.os.Trace;
 import android.os.UserHandle;
+import android.provider.Settings;
 import android.service.dreams.IDreamManager;
 import android.service.notification.StatusBarNotification;
 import android.util.ArraySet;
@@ -604,6 +607,22 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         // can transition to/from ScrimState.GLANCEABLE_HUB if needed.
         updateScrimController();
     };
+
+    private final ContentObserver mDualToneObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+        @Override
+        public void onChange(boolean selfChange) {
+            updateDualTone();
+        }
+    };
+
+    private void updateDualTone() {
+        boolean useDualTone = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.QS_DUAL_TONE, 1, // default to true
+                UserHandle.USER_CURRENT) == 1;
+        if (mScrimController != null) {
+            mScrimController.setDualToneColor(useDualTone);
+        }
+    }
 
     private boolean mNoAnimationOnNextBarModeChange;
     private final SysuiStatusBarStateController mStatusBarStateController;
@@ -1174,6 +1193,11 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                     mBrightnessMirrorShowingRepository.isShowing(),
                     this::setBrightnessMirrorShowing
             );
+
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.QS_DUAL_TONE),
+                    false, mDualToneObserver, UserHandle.USER_ALL);
+            updateDualTone();
         }
     }
 
