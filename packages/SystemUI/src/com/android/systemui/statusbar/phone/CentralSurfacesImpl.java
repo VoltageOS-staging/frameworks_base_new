@@ -3104,7 +3104,6 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces, Tune
                         TunerService.parseInteger(newValue, 100));
                 break;
                 }
-                break;
         }
 
     @Override
