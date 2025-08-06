@@ -79,6 +79,9 @@ import com.android.systemui.shade.transition.LargeScreenShadeInterpolator;
 import com.android.systemui.statusbar.notification.stack.ViewState;
 import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
+import android.os.UserHandle;
+import android.provider.Settings;
+import android.provider.Settings.System;
 import com.android.systemui.util.MediaArtUtils;
 import com.android.systemui.util.kotlin.JavaAdapter;
 import com.android.systemui.util.wakelock.DelayedWakeLock;
@@ -215,8 +218,6 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
      * This should not be lower than 0.54, otherwise we won't pass GAR.
      */
     public static final float BUSY_SCRIM_ALPHA = 1f;
-
-    private boolean mUseDualToneColor = true;
 
     /**
      * Scrim opacity that can have text on top.
@@ -1005,13 +1006,9 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         }
     }
 
-    public void setDualToneColor(boolean useDualToneColor) {
-        mUseDualToneColor = useDualToneColor;
-        onThemeChanged();
-    }
-
     private void applyState() {
-        boolean useDualTone = mUseDualToneColor;
+        boolean useDualTone = System.getIntForUser(mContext.getContentResolver(),
+                System.QS_DUAL_TONE, 1, UserHandle.USER_CURRENT) == 1;
 
         mInFrontTint = mState.getFrontTint();
         mBehindTint = mState.getBehindTint();
@@ -1655,6 +1652,8 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     }
 
     private void updateThemeColors() {
+        boolean useDualTone = System.getIntForUser(mContext.getContentResolver(),
+                System.QS_DUAL_TONE, 1, UserHandle.USER_CURRENT) == 1;
         if (mScrimBehind == null) return;
         int background = mContext.getColor(
                 com.android.internal.R.color.materialColorSurfaceDim);
@@ -1664,15 +1663,20 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         int surface = mContext.getColor(
                 com.android.internal.R.color.materialColorSurface);
 
-        mColors.setMainColor(mUseDualToneColor ? surface : background);
+        mColors.setMainColor(useDualTone ? surface : background);
         mColors.setSecondaryColor(accent);
 
         final boolean isSurfaceBackgroundLight = !ContrastColorUtil.isColorDark(surface);
         final boolean isBackgroundLight = !ContrastColorUtil.isColorDark(background);
-        mColors.setSupportsDarkText(mUseDualToneColor ? isSurfaceBackgroundLight : isBackgroundLight);
+        mColors.setSupportsDarkText(useDualTone ? isSurfaceBackgroundLight : isBackgroundLight);
 
         for (ScrimState state : ScrimState.values()) {
             state.setSurfaceColor(surface);
+        }
+
+        if (mState != null) {
+            applyState();
+            updateScrims();
         }
 
         mNeedsDrawableColorUpdate = true;

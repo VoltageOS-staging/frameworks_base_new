@@ -608,22 +608,6 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         updateScrimController();
     };
 
-    private final ContentObserver mDualToneObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
-        @Override
-        public void onChange(boolean selfChange) {
-            updateDualTone();
-        }
-    };
-
-    private void updateDualTone() {
-        boolean useDualTone = Settings.System.getIntForUser(mContext.getContentResolver(),
-                Settings.System.QS_DUAL_TONE, 1, // default to true
-                UserHandle.USER_CURRENT) == 1;
-        if (mScrimController != null) {
-            mScrimController.setDualToneColor(useDualTone);
-        }
-    }
-
     private boolean mNoAnimationOnNextBarModeChange;
     private final SysuiStatusBarStateController mStatusBarStateController;
 
@@ -1193,11 +1177,6 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                     mBrightnessMirrorShowingRepository.isShowing(),
                     this::setBrightnessMirrorShowing
             );
-
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.System.getUriFor(Settings.System.QS_DUAL_TONE),
-                    false, mDualToneObserver, UserHandle.USER_ALL);
-            updateDualTone();
         }
     }
 
