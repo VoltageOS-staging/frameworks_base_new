@@ -96,6 +96,7 @@ public final class PixelPropsUtils {
     private static final String[] packagesToChangeRecentPixel = {
             "com.amazon.avod.thirdpartyclient",
             "com.android.chrome",
+            "com.android.vending",
             "com.breel.wallpapers20",
             "com.disney.disneyplus",
             "com.google.android.aicore",
@@ -152,7 +153,7 @@ public final class PixelPropsUtils {
     private static final ComponentName GMS_ADD_ACCOUNT_ACTIVITY = ComponentName.unflattenFromString(
             "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity");
 
-    private static volatile boolean sIsGms, sIsExcluded;
+    private static volatile boolean sIsFinsky, sIsGms, sIsExcluded;
     private static volatile String sProcessName;
 
     static {
@@ -308,6 +309,10 @@ public final class PixelPropsUtils {
                         propsToChange.putAll(propsToChangePixel5a);
                     }
                 }
+            } else if (packageName.equals("com.android.vending")) {
+                sIsFinsky = true;
+                spoofBuildGms();
+                return;
             } else if (SystemProperties.getBoolean(SPOOF_PIXEL_PROPS, true)) {
                 if (sIsTablet) {
                     propsToChange.putAll(propsToChangePixelTablet);
@@ -631,7 +636,7 @@ public final class PixelPropsUtils {
             return;
         }
         // Check stack for SafetyNet or Play Integrity
-        if (isCallerSafetyNet() && !sIsExcluded) {
+        if (isCallerSafetyNet() || sIsFinsky && !sIsExcluded) {
             dlog("Blocked key attestation");
             throw new UnsupportedOperationException();
         }
