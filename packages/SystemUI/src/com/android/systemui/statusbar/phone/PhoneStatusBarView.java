@@ -74,6 +74,7 @@ public class PhoneStatusBarView extends FrameLayout {
     private int mDensity;
     private float mFontScale;
     private StatusBarLongPressGestureDetector mStatusBarLongPressGestureDetector;
+
     @Nullable
     private ViewGroup mStatusBarContents = null;
 

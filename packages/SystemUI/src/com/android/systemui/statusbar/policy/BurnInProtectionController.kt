@@ -23,9 +23,6 @@ import android.util.Log
 import com.android.systemui.res.R
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.doze.util.getBurnInOffset
-import com.android.systemui.navigationbar.NavigationModeController
-import com.android.systemui.navigationbar.views.NavigationBarView
-import com.android.systemui.shared.system.QuickStepContract.isGesturalMode
 import com.android.systemui.statusbar.phone.PhoneStatusBarView
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.statusbar.policy.ConfigurationController.ConfigurationListener
@@ -49,32 +46,24 @@ private val TAG = BurnInProtectionController::class.simpleName
 class BurnInProtectionController @Inject constructor(
     private val context: Context,
     configurationController: ConfigurationController,
-    navigationModeController: NavigationModeController,
-) : NavigationModeController.ModeChangedListener,
-    ConfigurationListener {
+) : ConfigurationListener {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
 
     private val shiftEnabled = context.resources.getBoolean(com.android.internal.R.bool.config_enableBurnInProtection)
 
-    private var navigationMode: Int = navigationModeController.addListener(this)
-
-    private var navigationBarView: NavigationBarView? = null
     private var phoneStatusBarView: PhoneStatusBarView? = null
 
     private var shiftJob: Job? = null
 
     private var maxStatusBarOffsetX = 0
     private var maxStatusBarOffsetY = 0
-    private var maxNavBarShiftX = 0
-    private var maxNavBarShiftY = 0
 
     private var statusBarOffset = Offset.Zero
-    private var navBarOffset = Offset.Zero
 
     init {
         logD {
-            "shiftEnabled = $shiftEnabled, isGesturalMode = ${isGesturalMode()}"
+            "shiftEnabled = $shiftEnabled}"
         }
         configurationController.addCallback(this)
         loadResources()
@@ -88,32 +77,9 @@ class BurnInProtectionController @Inject constructor(
             ) / 2
             maxStatusBarOffsetY = getDimensionPixelSize(R.dimen.status_bar_offset_max_y) / 2
         }
-        calculateNavBarMaxOffset()
         logD {
             "maxStatusBarOffsetX = $maxStatusBarOffsetX, maxStatusBarOffsetY = $maxStatusBarOffsetY"
         }
-    }
-
-    private fun calculateNavBarMaxOffset() {
-        with(context.resources) {
-            maxNavBarShiftX = if (isGesturalMode()) {
-                0
-            } else {
-                getDimensionPixelSize(R.dimen.navigation_bar_burn_in_offset_max_x)
-            }
-            maxNavBarShiftY = if (isGesturalMode()) {
-                getDimensionPixelSize(R.dimen.navigation_handle_bottom) / 3
-            } else {
-                getDimensionPixelSize(R.dimen.navigation_bar_burn_in_offset_max_y)
-            }
-        }
-        logD {
-            "maxNavBarShiftX = $maxNavBarShiftX, maxNavBarShiftY = $maxNavBarShiftY"
-        }
-    }
-
-    fun setNavigationBarView(navigationBarView: NavigationBarView?) {
-        this.navigationBarView = navigationBarView
     }
 
     fun setPhoneStatusBarView(phoneStatusBarView: PhoneStatusBarView?) {
@@ -128,15 +94,10 @@ class BurnInProtectionController @Inject constructor(
                     getBurnInOffsetX(maxStatusBarOffsetX),
                     getBurnInOffsetY(maxStatusBarOffsetY)
                 )
-                val nbOffset = if (isGesturalMode()) {
-                    Offset(0, getBurnInOffsetY(maxNavBarShiftY))
-                } else {
-                    Offset(getBurnInOffsetX(maxNavBarShiftX), getBurnInOffsetY(maxNavBarShiftY))
-                }
                 logD {
-                    "new offsets: sbOffset = $sbOffset, nbOffset = $nbOffset"
+                    "new offsets: sbOffset = $sbOffset"
                 }
-                updateViews(sbOffset, nbOffset)
+                updateViews(sbOffset)
                 delay(UPDATE_INTERVAL)
             }
         }
@@ -145,20 +106,13 @@ class BurnInProtectionController @Inject constructor(
         }
     }
 
-    private fun updateViews(sbOffset: Offset, nbOffset: Offset) {
+    private fun updateViews(sbOffset: Offset) {
         if (sbOffset != statusBarOffset) {
             logD {
                 "Translating statusbar"
             }
             phoneStatusBarView?.offsetStatusBar(sbOffset)
             statusBarOffset = sbOffset
-        }
-        if (nbOffset != navBarOffset) {
-            logD {
-                "Translating navbar"
-            }
-            navigationBarView?.offsetNavBar(nbOffset)
-            navBarOffset = nbOffset
         }
     }
 
@@ -169,20 +123,11 @@ class BurnInProtectionController @Inject constructor(
         }
         coroutineScope.launch {
             shiftJob?.cancelAndJoin()
-            updateViews(Offset.Zero, Offset.Zero)
+            updateViews(Offset.Zero)
             logD {
                 "Cancelled shift job"
             }
         }
-    }
-
-    override fun onNavigationModeChanged(mode: Int) {
-        if (navigationMode == mode) return
-        navigationMode = mode
-        logD {
-            "onNavigationModeChanged: isGesturalMode = ${isGesturalMode()}"
-        }
-        calculateNavBarMaxOffset()
     }
 
     override fun onDensityOrFontScaleChanged() {
@@ -191,8 +136,6 @@ class BurnInProtectionController @Inject constructor(
         }
         loadResources()
     }
-
-    private fun isGesturalMode() = isGesturalMode(navigationMode)
 }
 
 private fun getBurnInOffsetX(maxOffset: Int): Int {

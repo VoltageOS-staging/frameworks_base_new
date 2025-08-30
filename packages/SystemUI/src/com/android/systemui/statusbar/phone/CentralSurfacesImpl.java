@@ -1295,6 +1295,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                         setBouncerShowingForStatusBarComponents(mBouncerShowing);
                         checkBarModes();
                         mBurnInProtectionController.setPhoneStatusBarView(mPhoneStatusBarViewController.getPhoneStatusBarView());
+
                         mOnGoingActionProgressController =
                              new OnGoingActionProgressController(
                                      mContext,
@@ -1602,7 +1603,6 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     protected void createNavigationBar(@Nullable RegisterStatusBarResult result) {
         StatusBarConnectedDisplays.assertInLegacyMode();
         mNavigationBarController.createNavigationBars(true /* includeDefaultDisplay */, result);
-        mBurnInProtectionController.setNavigationBarView(getNavigationBarView());
     }
 
     /**
