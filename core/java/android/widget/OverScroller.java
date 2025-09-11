@@ -590,7 +590,7 @@ public class OverScroller {
         private float mPhysicalCoeff;
 
         private static float DECELERATION_RATE = (float) (Math.log(0.78) / Math.log(0.9));
-        private static final float INFLEXION = 0.35f; // Tension lines cross at (INFLEXION, 1)
+        private static final float INFLEXION = 0.26f; // Tension lines cross at (INFLEXION, 1)
         private static final float START_TENSION = 0.5f;
         private static final float END_TENSION = 1.0f;
         private static final float P1 = START_TENSION * INFLEXION;
@@ -603,6 +603,17 @@ public class OverScroller {
         private static final int SPLINE = 0;
         private static final int CUBIC = 1;
         private static final int BALLISTIC = 2;
+        
+        private boolean USE_MOTO_SCROLLER = true;
+
+        private static float SPLINE_DISTANCE_TUNING_RATE = 1.0f;
+        private static float SPLINE_DURATION_TUNING_RATE = 1.0f;
+        private float DURATION_M1 = 1.8f;
+        private float DURATION_M2 = 1.45f;
+        private float DURATION_M3 = 2.0f;
+        private float DISTANCE_M1 = 4.0f;
+        private float DISTANCE_M2 = 1.25f;
+        private float DISTANCE_M3 = 1.7f;
 
         static {
             float x_min = 0.0f;
@@ -795,14 +806,40 @@ public class OverScroller {
         private double getSplineFlingDistance(int velocity) {
             final double l = getSplineDeceleration(velocity);
             final double decelMinusOne = DECELERATION_RATE - 1.0;
-            return mFlingFriction * mPhysicalCoeff * Math.exp(DECELERATION_RATE / decelMinusOne * l);
+            double distance = mFlingFriction * mPhysicalCoeff * Math.exp((DECELERATION_RATE / decelMinusOne) * l) * SPLINE_DISTANCE_TUNING_RATE;
+            if (USE_MOTO_SCROLLER) {
+                return getSplineFlingDistanceM1(velocity) + (DISTANCE_M2 * distance);
+            }
+            return distance;
         }
 
         /* Returns the duration, expressed in milliseconds */
         private int getSplineFlingDuration(int velocity) {
             final double l = getSplineDeceleration(velocity);
             final double decelMinusOne = DECELERATION_RATE - 1.0;
-            return (int) (1000.0 * Math.exp(l / decelMinusOne));
+            int duration = (int) (Math.exp(l / decelMinusOne) * 1000.0d * SPLINE_DURATION_TUNING_RATE);
+            if (USE_MOTO_SCROLLER) {
+                return (int) (getSplineFlingDurationM1(velocity) + (duration * this.DURATION_M2));
+            }
+            return duration;
+        }
+
+
+        private double getSplineDistanceM1(int velocity) {
+            double value = Math.abs(velocity) / ((this.mFlingFriction * this.mPhysicalCoeff) * this.DISTANCE_M1);
+            return value * value;
+        }
+
+        private double getSplineFlingDistanceM1(int velocity) {
+            return (((this.mFlingFriction * this.mPhysicalCoeff) * getSplineDistanceM1(velocity)) / Math.exp(getSplineDistanceM1(velocity))) * this.DISTANCE_M3;
+        }
+
+        private double getSplineDurationM1(int velocity) {
+            return Math.abs(velocity) / ((this.mFlingFriction * this.mPhysicalCoeff) * this.DURATION_M1);
+        }
+
+        private int getSplineFlingDurationM1(int velocity) {
+            return (int) (((getSplineDurationM1(velocity) * 1000.0d) / Math.exp(getSplineDurationM1(velocity))) * this.DURATION_M3);
         }
 
         private void fitOnBounceCurve(int start, int end, int velocity) {
