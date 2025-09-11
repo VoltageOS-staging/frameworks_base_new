@@ -1,4 +1,4 @@
-		/*
+/*
  * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +16,7 @@
 
 package com.android.systemui.shade.ui
 
+import android.content.res.Configuration
 import android.content.res.Resources
 import android.content.Context
 import android.graphics.Color
@@ -24,6 +25,11 @@ import com.android.internal.graphics.ColorUtils
 import com.android.systemui.res.R
 
 object ShadeColors {
+    
+    // Cache for better performance
+    private var cachedDualToneSetting: Boolean? = null
+    private var lastContextHashCode: Int = 0
+    
     @JvmStatic
     fun Resources.shadePanel(blurSupported: Boolean, context: Context): Int {
         return if (blurSupported) {
@@ -36,56 +42,141 @@ object ShadeColors {
     @JvmStatic
     fun Resources.notificationScrim(blurSupported: Boolean, context: Context): Int {
         return if (blurSupported) {
-            notificationScrimStandard()
+            notificationScrimStandard(context)
         } else {
             notificationScrimFallback()
         }
     }
 
-    @JvmStatic
-    private fun Resources.shadePanelStandard(context: Context): Int {
-        val useDualTone = if (context != null) {
-            try {
-                Settings.System.getInt(context.contentResolver, Settings.System.QS_DUAL_TONE, 1) == 1
-            } catch (e: Exception) {
-            true // fallback to default
-        }
-    } else {
-        true // fallback to default when context is null
+    /**
+     * Check if device is in dark mode
+     */
+    private fun Resources.isNightModeActive(): Boolean {
+        return (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == 
+               Configuration.UI_MODE_NIGHT_YES
     }
 
-        val topLayerAlpha = if (useDualTone) 0.6f else 0.7f
-
-        val layerAbove = ColorUtils.setAlphaComponent(
-            getColor(R.color.shade_panel_base, null),
-            (topLayerAlpha * 255).toInt()
-        )
-
-        val layerBelow = if (useDualTone) {
-            ColorUtils.setAlphaComponent(Color.WHITE, (0.15f * 255).toInt())
-        } else {
-            val colorBase = getColor(R.color.shade_panel_base_color, null)
-            ColorUtils.setAlphaComponent(colorBase, (0.15f * 255).toInt())
+    /**
+     * Get dual tone setting with caching for better performance
+     */
+    private fun getDualToneSetting(context: Context?): Boolean {
+        if (context == null) return true
+        
+        val currentHashCode = context.hashCode()
+        if (cachedDualToneSetting != null && lastContextHashCode == currentHashCode) {
+            return cachedDualToneSetting!!
         }
+        
+        val dualTone = try {
+            Settings.System.getInt(context.contentResolver, "qs_dual_tone", 1) == 1
+        } catch (e: Exception) {
+            true // Safe fallback
+        }
+        
+        cachedDualToneSetting = dualTone
+        lastContextHashCode = currentHashCode
+        return dualTone
+    }
 
-        return ColorUtils.compositeColors(layerAbove, layerBelow)
+    @JvmStatic
+    private fun Resources.shadePanelStandard(context: Context): Int {
+        val useDualTone = getDualToneSetting(context)
+        val isNightMode = isNightModeActive()
+        
+        // Create multiple layers for more sophisticated blending
+        val baseLayer = getColor(R.color.shade_panel_base, null)
+        
+        // Adjust opacity based on theme and dual tone setting
+        val primaryAlpha = when {
+            isNightMode && useDualTone -> 0.75f
+            isNightMode -> 0.8f
+            useDualTone -> 0.6f
+            else -> 0.65f
+        }
+        
+        val secondaryAlpha = when {
+            isNightMode && useDualTone -> 0.18f
+            isNightMode -> 0.12f
+            useDualTone -> 0.15f
+            else -> 0.1f
+        }
+        
+        // Primary layer (the main shade color)
+        val primaryLayer = ColorUtils.setAlphaComponent(
+            baseLayer,
+            (primaryAlpha * 255).toInt()
+        )
+        
+        // Secondary layer (for depth and contrast)
+        val secondaryLayer = if (useDualTone) {
+            // Use white tinting for dual tone
+            ColorUtils.setAlphaComponent(Color.WHITE, (secondaryAlpha * 255).toInt())
+        } else {
+            // Use base color variation for single tone
+            val adjustedBase = if (isNightMode) {
+                ColorUtils.blendARGB(baseLayer, Color.WHITE, 0.1f)
+            } else {
+                ColorUtils.blendARGB(baseLayer, Color.BLACK, 0.05f)
+            }
+            ColorUtils.setAlphaComponent(adjustedBase, (secondaryAlpha * 255).toInt())
+        }
+        
+        // Composite the layers
+        return ColorUtils.compositeColors(primaryLayer, secondaryLayer)
     }
 
     @JvmStatic
     private fun Resources.shadePanelFallback(): Int {
-        return ColorUtils.blendARGB(getColor(R.color.nt_scrim_behind_1), getColor(R.color.nt_scrim_behind_2), 0.5f)
+        return ColorUtils.blendARGB(
+            getColor(R.color.nt_scrim_behind_1), 
+            getColor(R.color.nt_scrim_behind_2), 
+            0.5f
+        )
     }
 
     @JvmStatic
-    private fun Resources.notificationScrimStandard(): Int {
-        return ColorUtils.setAlphaComponent(
-            getColor(R.color.notification_scrim_base, null),
-            (0.8f * 255).toInt(),
+    private fun Resources.notificationScrimStandard(context: Context): Int {
+        val isNightMode = isNightModeActive()
+        val useDualTone = getDualToneSetting(context)
+        
+        // Base scrim layer
+        val baseScrim = getColor(R.color.notification_scrim_base, null)
+        
+        // Adjust alpha based on theme for better visibility
+        val scrimAlpha = when {
+            isNightMode -> 0.85f
+            else -> 0.75f
+        }
+        
+        val primaryScrim = ColorUtils.setAlphaComponent(
+            baseScrim,
+            (scrimAlpha * 255).toInt()
         )
+        
+        // Add subtle tinting layer if dual tone is enabled
+        return if (useDualTone) {
+            val tintAlpha = if (isNightMode) 0.08f else 0.12f
+            val tintLayer = ColorUtils.setAlphaComponent(
+                Color.WHITE, 
+                (tintAlpha * 255).toInt()
+            )
+            ColorUtils.compositeColors(primaryScrim, tintLayer)
+        } else {
+            primaryScrim
+        }
     }
 
     @JvmStatic
     private fun Resources.notificationScrimFallback(): Int {
         return getColor(R.color.notification_scrim_fallback, null)
+    }
+    
+    /**
+     * Clear cache when settings might have changed
+     */
+    @JvmStatic
+    fun clearCache() {
+        cachedDualToneSetting = null
+        lastContextHashCode = 0
     }
 }
