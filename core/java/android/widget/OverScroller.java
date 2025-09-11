@@ -20,10 +20,13 @@ import android.compat.annotation.UnsupportedAppUsage;
 import android.content.Context;
 import android.hardware.SensorManager;
 import android.os.Build;
+import android.os.Process;
 import android.util.Log;
 import android.view.ViewConfiguration;
 import android.view.animation.AnimationUtils;
 import android.view.animation.Interpolator;
+
+import com.android.internal.util.BoostHelper;
 
 /**
  * This class encapsulates scrolling with the ability to overshoot the bounds
@@ -700,6 +703,7 @@ public class OverScroller {
             // TODO: restore when WebView uses the fast fling implemented in this class.
             // mCurrVelocity = 0.0f;
             mFinished = true;
+            BoostHelper.animationBoost(Process.myPid(), false);
         }
 
         void setFinalPosition(int position) {
@@ -781,6 +785,7 @@ public class OverScroller {
                 adjustDuration(mStart, mFinal, max);
                 mFinal = max;
             }
+            BoostHelper.animationBoost(Process.myPid(), true);
         }
 
         private double getSplineDeceleration(int velocity) {
