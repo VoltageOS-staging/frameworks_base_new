@@ -278,7 +278,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
 
     private float mInFrontAlpha = NOT_INITIALIZED;
     private float mBehindAlpha = NOT_INITIALIZED;
-    private float mNotificationsAlpha = NOT_INITIALIZED;
+    private float mNotificationsAlpha = 0;
 
     private int mInFrontTint;
     private int mBehindTint;
@@ -1016,11 +1016,8 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
 
         mInFrontAlpha = mState.getFrontAlpha();
         mBehindAlpha = mState.getBehindAlpha();
-	mNotificationsAlpha = mState.getNotifAlpha();
 
-        if (!useDualTone) {
-            mNotificationsAlpha = 0;
-        }
+        mNotificationsAlpha = useDualTone ? mState.getNotifAlpha() : 0;
 
         assertAlphasValid();
 

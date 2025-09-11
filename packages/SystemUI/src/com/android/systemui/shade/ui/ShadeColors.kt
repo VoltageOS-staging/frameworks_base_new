@@ -54,7 +54,7 @@ object ShadeColors {
         true // fallback to default when context is null
     }
 
-        val topLayerAlpha = if (useDualTone) 0.4f else 0.5f
+        val topLayerAlpha = if (useDualTone) 0.6f else 0.7f
 
         val layerAbove = ColorUtils.setAlphaComponent(
             getColor(R.color.shade_panel_base, null),
@@ -62,10 +62,10 @@ object ShadeColors {
         )
 
         val layerBelow = if (useDualTone) {
-            ColorUtils.setAlphaComponent(Color.WHITE, (0.1f * 255).toInt())
+            ColorUtils.setAlphaComponent(Color.WHITE, (0.15f * 255).toInt())
         } else {
             val colorBase = getColor(R.color.shade_panel_base_color, null)
-            ColorUtils.setAlphaComponent(colorBase, (0.1f * 255).toInt())
+            ColorUtils.setAlphaComponent(colorBase, (0.15f * 255).toInt())
         }
 
         return ColorUtils.compositeColors(layerAbove, layerBelow)
@@ -80,7 +80,7 @@ object ShadeColors {
     private fun Resources.notificationScrimStandard(): Int {
         return ColorUtils.setAlphaComponent(
             getColor(R.color.notification_scrim_base, null),
-            (0.6f * 255).toInt(),
+            (0.8f * 255).toInt(),
         )
     }
 
