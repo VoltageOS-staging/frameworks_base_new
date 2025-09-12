@@ -54,7 +54,7 @@ object ShadeColors {
         true // fallback to default when context is null
     }
 
-        val topLayerAlpha = if (useDualTone) 0.4f else 0.5f
+        val topLayerAlpha = 0.75f
 
         val layerAbove = ColorUtils.setAlphaComponent(
             getColor(R.color.shade_panel_base, null),
