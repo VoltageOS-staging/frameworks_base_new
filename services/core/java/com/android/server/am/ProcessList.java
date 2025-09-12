@@ -2591,15 +2591,18 @@ public final class ProcessList {
                         new String[]{PROC_START_SEQ_IDENT + app.getStartSeq()});
                 // By now the process group should have been created by zygote.
                 app.mProcessGroupCreated = true;
-                if (startResult.pid > 0 && app.getHostingRecord() != null && !app.getHostingRecord().isTopApp()) {
+                if (startResult.pid > 0 && app.getHostingRecord() != null) {
                     sHandler.postDelayed(() -> {
                         try {
-                            if (app.uid % 100000 > 10000 && !BoostAdjuster.isInWhiteList(app.processName) 
-                                    && !BoostAdjuster.isInPerfList(app.processName)) {
-                                Process.setProcessGroup(startResult.pid, BoostAdjuster.THREAD_GROUP_NT_FOREGROUND);
-                            } else if (BoostAdjuster.isInPerfList(app.processName)) {
-                                Process.setProcessGroup(startResult.pid, BoostAdjuster.THREAD_GROUP_RESTRICTED);
+                            if (!app.getHostingRecord().isTopApp()) {
+                                if (app.uid % 100000 > 10000 && !BoostAdjuster.isInWhiteList(app.processName) 
+                                        && !BoostAdjuster.isInPerfList(app.processName)) {
+                                    Process.setProcessGroup(startResult.pid, BoostAdjuster.THREAD_GROUP_NT_FOREGROUND);
+                                } else if (BoostAdjuster.isInPerfList(app.processName)) {
+                                    Process.setProcessGroup(startResult.pid, BoostAdjuster.THREAD_GROUP_RESTRICTED);
+                                }
                             }
+                            if (BoostAdjuster.isInPerfList(app.processName)) mService.mUXAwareScheduler.handleProcessStart(startResult.pid, app.processName, "start");
                         } catch (Exception e) {
                         }
                     }, 50L);

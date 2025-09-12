@@ -489,6 +489,7 @@ import com.android.server.wm.ActivityServiceConnectionsHolder;
 import com.android.server.wm.ActivityTaskManagerInternal;
 import com.android.server.wm.ActivityTaskManagerService;
 import com.android.server.wm.SurfaceAnimationThread;
+import com.android.server.wm.UXAwareScheduler;
 import com.android.server.wm.WindowEventDispatcher;
 import com.android.server.wm.WindowManagerInternal;
 import com.android.server.wm.WindowManagerService;
@@ -776,7 +777,7 @@ public class ActivityManagerService extends IActivityManager.Stub
     
     private final BoostAdjuster mBoostAdjuster;
     private final MemoryManager mMemoryManager;
-    private final TaskProfiler mTaskProfiler = new TaskProfiler();
+    public final UXAwareScheduler mUXAwareScheduler;
 
     /**
      * Uids of apps with current active camera sessions.  Access synchronized on
@@ -2489,6 +2490,7 @@ public class ActivityManagerService extends IActivityManager.Stub
         mSwipeToScreenshotObserver = null;
         mBoostAdjuster = new BoostAdjuster(this);
         mMemoryManager = new MemoryManager(this);
+        mUXAwareScheduler = new UXAwareScheduler(mBoostAdjuster);
     }
 
     // Note: This method is invoked on the main thread but may need to attach various
@@ -2619,6 +2621,7 @@ public class ActivityManagerService extends IActivityManager.Stub
         
         mBoostAdjuster = new BoostAdjuster(this);
         mMemoryManager = new MemoryManager(this);
+        mUXAwareScheduler = new UXAwareScheduler(mBoostAdjuster);
     }
 
     void setBroadcastQueueForTest(BroadcastQueue broadcastQueue) {
@@ -3385,6 +3388,7 @@ public class ActivityManagerService extends IActivityManager.Stub
     @GuardedBy("this")
     final void handleAppDiedLocked(ProcessRecord app, int pid,
             boolean restarting, boolean allowRestart, boolean fromBinderDied) {
+        mUXAwareScheduler.untrackThreads(pid, app.processName);
         boolean kept = cleanUpApplicationRecordLocked(app, pid, restarting, allowRestart, -1,
                 false /*replacingPid*/, fromBinderDied);
         if (!kept && !restarting) {
@@ -5294,7 +5298,6 @@ public class ActivityManagerService extends IActivityManager.Stub
 
             // Start PSI monitoring in LMKD if it was skipped earlier.
             ProcessList.startPsiMonitoringAfterBoot();
-            mTaskProfiler.initTaskProfiles();
             mHandler.postDelayed(() -> {
                 SystemProperties.set("persist.sys.voltage_boot_completed", "1");
             }, 5000);
@@ -8425,7 +8428,7 @@ public class ActivityManagerService extends IActivityManager.Stub
                             THREAD_PRIORITY_TOP_APP_BOOST);
                     }
                 }
-                mBoostAdjuster.boostHomeProcess(proc);
+                mBoostAdjuster.boostCriticalProcess(proc);
             } else {
                 if (DEBUG_OOM_ADJ) {
                     Slog.d("UI_FIFO", "Didn't set thread from setRenderThread? "
@@ -9284,7 +9287,7 @@ public class ActivityManagerService extends IActivityManager.Stub
             mComponentAliasResolver.onSystemReady(mConstants.mEnableComponentAlias,
                     mConstants.mComponentAliasOverrides);
             t.traceEnd(); // componentAlias
-
+            mUXAwareScheduler.systemReady();
             t.traceEnd(); // PhaseActivityManagerReady
         }
     }

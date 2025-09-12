@@ -15,6 +15,11 @@
  */
 package com.android.server.am;
 
+import static android.os.Process.THREAD_GROUP_BACKGROUND;
+import static android.os.Process.THREAD_GROUP_FOREGROUND;
+import static android.os.Process.THREAD_GROUP_RESTRICTED;
+import static android.os.Process.THREAD_GROUP_TOP_APP;
+
 import android.os.FileUtils;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -39,6 +44,9 @@ public class BoostAdjuster {
 
     public static final int THREAD_GROUP_NT_FOREGROUND = 10;
     public static final int THREAD_GROUP_RESTRICTED = Process.THREAD_GROUP_RESTRICTED;
+    
+    public static final String SYSTEM_UI_PKG = "com.android.systemui";
+    public static final String LAUNCHER_PKG = "com.android.launcher3";
 
     private static final String CPU_BG = BoostConfig.cpuPath("background");
     private static final String CPU_NT_FG = BoostConfig.cpuPath("nt_foreground");
@@ -67,26 +75,28 @@ public class BoostAdjuster {
     private static final int MSG_SET_THREAD_AFFINITY = 5;
     private static final int MSG_SET_PERFORMANCE_MODE = 6;
     private static final int MSG_BOOST_HINT = 7;
-    private static final int MSG_BOOST_HOME_PROCESS = 8;
+    private static final int MSG_BOOST_CRIT_PROCESS = 8;
     private static final int MSG_ON_WAKEFULNESS_CHANGED = 9;
     private static final int MSG_INPUT_BOOST = 10;
     private static final int MSG_DISABLE_INPUT_BOOST = 11;
 
-    private final ActivityManagerService mAm;
+    public final ActivityManagerService mAm;
     private final HandlerThread mHandlerThread;
     private final BoostHandler mHandler;
     private final UiHandler mUiHandler;
 
     private volatile String currentReason = "none";
-    private volatile int mLauncherPid = 0;
-    private volatile int mRenderTid = 0;
+    private volatile int mL3Pid = 0;
+    private volatile int mL3RTid = 0;
+    private volatile int mSysUiPid = 0;
+    private volatile int mSysUiRTid = 0;
 
     static {
         sAppWhiteList.add("com.google.android.providers.media.module");
         sAppWhiteList.add("android.process.media");
         sAppWhiteList.add("android.os.cts");
-        sAppPerfList.add("com.android.systemui");
-        sAppPerfList.add("com.android.launcher3");
+        sAppPerfList.add(SYSTEM_UI_PKG);
+        sAppPerfList.add(LAUNCHER_PKG);
         CAMERA_APPS.add("com.google.android.GoogleCamera");
         CAMERA_APPS.add("org.lineageos.aperture");
         CAMERA_APPS.add("com.oplus.camera");
@@ -134,8 +144,8 @@ public class BoostAdjuster {
         );
     }
 
-    public void boostHomeProcess(ProcessRecord proc) {
-        mHandler.sendMessage(mHandler.obtainMessage(MSG_BOOST_HOME_PROCESS, proc));
+    public void boostCriticalProcess(ProcessRecord proc) {
+        mHandler.sendMessage(mHandler.obtainMessage(MSG_BOOST_CRIT_PROCESS, proc));
     }
 
     public void onWakefulnessChanged(boolean awake) {
@@ -174,16 +184,24 @@ public class BoostAdjuster {
         if (proc == null) return;
         final int renderTid = proc.getRenderThreadTid();
         final int prio = Process.getThreadPriority(pid);
+        final boolean isSysUI = mSysUiPid == pid;
+        final boolean isL3 = mL3Pid == pid;
+        boolean isCoreProcess = true;
         try {
             if (enabled) {
-                if (mLauncherPid != pid) {
-                    Process.setThreadScheduler(pid, Process.SCHED_RR | Process.SCHED_RESET_ON_FORK, 1);
-                    Process.setThreadScheduler(renderTid, Process.SCHED_RR | Process.SCHED_RESET_ON_FORK, 10);
-                    logger("animation boost: sysui pid: " + pid + " renderthread id: " + renderTid);
+                if (isL3) {
+                    if (mL3Pid > 0) mAm.scheduleAsFifoPriority(mL3Pid, true, 1);
+                    if (mL3RTid > 0) mAm.scheduleAsFifoPriority(mL3RTid, true, 10);
+                    logger("animation boost: launcher pid: " + mL3Pid + " renderthread id: " + mL3RTid);
+                } else if (isSysUI) {
+                    if (mSysUiPid > 0) Process.setThreadScheduler(mSysUiPid, Process.SCHED_RR | Process.SCHED_RESET_ON_FORK, 1);
+                    if (mL3RTid > 0) Process.setThreadScheduler(mSysUiRTid, Process.SCHED_RR | Process.SCHED_RESET_ON_FORK, 10);
+                    logger("animation boost: sysui pid: " + mSysUiPid + " renderthread id: " + mSysUiRTid);
                 } else {
-                    if (mLauncherPid > 0) mAm.scheduleAsFifoPriority(mLauncherPid, true, 1);
-                    if (mRenderTid > 0) mAm.scheduleAsFifoPriority(mRenderTid, true, 10);
-                    logger("animation boost: launcher pid: " + mLauncherPid + " renderthread id: " + mRenderTid);
+                    mAm.scheduleAsFifoPriority(pid, true, 1);
+                    if (renderTid > 0) mAm.scheduleAsFifoPriority(renderTid, true, 1);
+                    logger("animation boost: pid: " + pid + " renderthread id: " + renderTid);
+                    isCoreProcess = false;
                 }
             } else {
                 Process.setThreadScheduler(pid, 0, 0);
@@ -191,18 +209,22 @@ public class BoostAdjuster {
                 Process.setThreadScheduler(renderTid, 0, 0);
             }
         } catch (Exception ignored) {}
-        boostRestricted(pid, enabled);
+        if (!isCoreProcess) {
+            Process.setThreadGroupAndCpuset(pid, THREAD_GROUP_TOP_APP);
+            Process.setThreadAffinity(pid, enabled ? 0 : 2);
+        }
+        boostAnimatePid(pid, enabled);
         boostSF(enabled);
     }
 
     public void setThreadAffinityInternal(int pid, int affinity) {
         if (affinity == 0) {
-            Process.setThreadGroupAndCpuset(pid, Process.THREAD_GROUP_TOP_APP);
+            Process.setThreadGroupAndCpuset(pid, THREAD_GROUP_TOP_APP);
         } else {
             Process.setThreadGroupAndCpuset(pid, 
-                mLauncherPid != pid 
-                    ? Process.THREAD_GROUP_FOREGROUND 
-                    : Process.THREAD_GROUP_RESTRICTED);
+                mL3Pid != pid 
+                    ? THREAD_GROUP_FOREGROUND 
+                    : THREAD_GROUP_RESTRICTED);
         }
         Process.setThreadAffinity(pid, affinity);
     }
@@ -237,14 +259,18 @@ public class BoostAdjuster {
     private void inputBoostInternal(boolean enable) {
         adjustCpuset("background", enable);
         adjustCpuset("nt_foreground", enable);
-        SystemProperties.set("dalvik.vm.dex2oat-threads", enable ? "1" : "2");
     }
 
-    private void boostHomeProcessInternal(ProcessRecord proc) {
-        if (!"com.android.launcher3".equals(proc.processName)) return;
-        mLauncherPid = proc.getPid();
-        mRenderTid = proc.getRenderThreadTid();
-        logger("Boosting Launcher pid: " + mLauncherPid + "renderthread id: " + mRenderTid);
+    private void boostCriticalProcessInternal(ProcessRecord proc) {
+        if (LAUNCHER_PKG.equals(proc.processName)) {
+            mL3Pid = proc.getPid();
+            mL3RTid = proc.getRenderThreadTid();
+            logger("Boosting Launcher pid: " + mL3Pid + "renderthread id: " + mL3RTid);
+        } else if (SYSTEM_UI_PKG.equals(proc.processName)) {
+            mSysUiPid = proc.getPid();
+            mSysUiRTid = proc.getRenderThreadTid();
+            logger("Boosting systemui pid: " + mSysUiPid + "renderthread id: " + mSysUiRTid);
+        }
     }
 
     private void onWakefulnessChangedInternal(boolean awake) {
@@ -252,12 +278,31 @@ public class BoostAdjuster {
         restrictBackground(!awake);
     }
 
-    private void boostRestricted(int pid, boolean enable) {
-        String boostVal = enable ? "100" : "0";
-        writeInternal(RESTRICTED_UC_MIN, boostVal);
-        writeInternal(RESTRICTED_UC_MAX, "100");
-        writeInternal(CPU_RESTRICTED, enable ? BoostConfig.BIG_CORES : ALL_CORES);
-        writeInternal(enable ? RESTRICTED_PROCS : ROOT_PROCS, String.valueOf(pid));
+    public void boostAnimatePid(int tid, boolean enable) {
+        mHandler.post(() -> {
+            try {
+                Process.setProcessGroup(tid, enable ? THREAD_GROUP_RESTRICTED : THREAD_GROUP_TOP_APP);
+                String boostVal = enable ? "100" : "0";
+                writeInternal(RESTRICTED_UC_MIN, boostVal);
+                writeInternal(RESTRICTED_UC_MAX, "100");
+                writeInternal(CPU_RESTRICTED, enable ? BoostConfig.BIG_CORES : ALL_CORES);
+                writeInternal(enable ? RESTRICTED_PROCS : ROOT_PROCS, String.valueOf(tid));
+                logger("Boosting tid: " + tid);
+            } catch (Exception e) {}
+        });
+    }
+
+    public void boostUxThread(int tid, String boostValue, boolean enable) {
+        mHandler.post(() -> {
+            try {
+                Process.setProcessGroup(tid, enable ? THREAD_GROUP_RESTRICTED : THREAD_GROUP_BACKGROUND);
+                writeInternal(RESTRICTED_UC_MIN, boostValue);
+                writeInternal(RESTRICTED_UC_MAX, boostValue);
+                writeInternal(CPU_RESTRICTED, enable ? BoostConfig.BIG_CORES : ALL_CORES);
+                writeInternal(enable ? RESTRICTED_PROCS : ROOT_PROCS, String.valueOf(tid));
+                logger("Boosting tid: " + tid);
+            } catch (Exception e) {}
+        });
     }
 
     private void restrictBackground(boolean limit) {
@@ -316,8 +361,8 @@ public class BoostAdjuster {
             }
         }
         writeInternal(CPU_DISPLAY, enable ? ALL_CORES : BoostConfig.DISPLAY_CPU);
-        String val = enable ? String.valueOf(BoostConfig.SF_UC_MIN_BOOST) : "0";
-        writeInternal(DISPLAY_UC_MIN, val);
+        String boostVal = enable ? "100" : "0";
+        writeInternal(DISPLAY_UC_MIN, boostVal);
         writeInternal(DISPLAY_UC_MAX, "100");
     }
 
@@ -391,8 +436,8 @@ public class BoostAdjuster {
                     BoostHintParams bh = (BoostHintParams) msg.obj;
                     mAdjuster.boostHintInternal(bh.reason, bh.duration);
                     break;
-                case MSG_BOOST_HOME_PROCESS:
-                    mAdjuster.boostHomeProcessInternal((ProcessRecord) msg.obj);
+                case MSG_BOOST_CRIT_PROCESS:
+                    mAdjuster.boostCriticalProcessInternal((ProcessRecord) msg.obj);
                     break;
                 case MSG_ON_WAKEFULNESS_CHANGED:
                     mAdjuster.onWakefulnessChangedInternal(msg.arg1 == 1);
