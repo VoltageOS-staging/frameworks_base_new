@@ -32,7 +32,7 @@ import android.os.ServiceManager;
 import android.os.SystemProperties;
 import android.util.Slog;
 
-import com.android.server.UiThread;
+import com.android.server.wm.AxBgThread;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -81,9 +81,7 @@ public class BoostAdjuster {
     private static final int MSG_DISABLE_INPUT_BOOST = 11;
 
     public final ActivityManagerService mAm;
-    private final HandlerThread mHandlerThread;
     private final BoostHandler mHandler;
-    private final UiHandler mUiHandler;
 
     private volatile String currentReason = "none";
     private volatile int mL3Pid = 0;
@@ -104,10 +102,7 @@ public class BoostAdjuster {
 
     public BoostAdjuster(ActivityManagerService am) {
         mAm = am;
-        mHandlerThread = new HandlerThread("BoostAdjusterThread");
-        mHandlerThread.start();
-        mHandler = new BoostHandler(mHandlerThread.getLooper(), this);
-        mUiHandler = new UiHandler(UiThread.getHandler().getLooper(), this);
+        mHandler = new BoostHandler(AxBgThread.get().getLooper(), this);
     }
 
     public void write(String path, String value) {
@@ -136,10 +131,10 @@ public class BoostAdjuster {
     }
 
     public void inputBoost(long durationMillis) {
-        mUiHandler.removeMessages(MSG_DISABLE_INPUT_BOOST);
-        mUiHandler.sendMessage(mUiHandler.obtainMessage(MSG_INPUT_BOOST, (int) durationMillis, 0));
-        mUiHandler.sendMessageDelayed(
-            mUiHandler.obtainMessage(MSG_DISABLE_INPUT_BOOST), 
+        mHandler.removeMessages(MSG_DISABLE_INPUT_BOOST);
+        mHandler.sendMessage(mHandler.obtainMessage(MSG_INPUT_BOOST, (int) durationMillis, 0));
+        mHandler.sendMessageDelayed(
+            mHandler.obtainMessage(MSG_DISABLE_INPUT_BOOST), 
             durationMillis
         );
     }
@@ -442,23 +437,6 @@ public class BoostAdjuster {
                 case MSG_ON_WAKEFULNESS_CHANGED:
                     mAdjuster.onWakefulnessChangedInternal(msg.arg1 == 1);
                     break;
-                default:
-                    logger("Unknown message: " + msg.what);
-            }
-        }
-    }
-    
-    private static class UiHandler extends Handler {
-        private final BoostAdjuster mAdjuster;
-
-        UiHandler(Looper looper, BoostAdjuster adjuster) {
-            super(looper);
-            mAdjuster = adjuster;
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
                 case MSG_INPUT_BOOST:
                     mAdjuster.inputBoostInternal(true);
                     break;
@@ -466,7 +444,7 @@ public class BoostAdjuster {
                     mAdjuster.inputBoostInternal(false);
                     break;
                 default:
-                    logger("Unknown UI message: " + msg.what);
+                    logger("Unknown message: " + msg.what);
             }
         }
     }
