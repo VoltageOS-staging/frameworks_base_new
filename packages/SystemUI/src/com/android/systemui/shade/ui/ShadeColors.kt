@@ -16,15 +16,19 @@
 
 package com.android.systemui.shade.ui
 
+import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Resources
-import android.content.Context
 import android.graphics.Color
 import android.provider.Settings
 import com.android.internal.graphics.ColorUtils
 import com.android.systemui.res.R
 
 object ShadeColors {
+    /**
+     * Calculates the main shade panel background color.
+     * Signature is compatible with the dual-tone patch.
+     */
     @JvmStatic
     fun Resources.shadePanel(blurSupported: Boolean, context: Context): Int {
         return if (blurSupported) {
@@ -34,6 +38,11 @@ object ShadeColors {
         }
     }
 
+    /**
+     * Calculates the notification scrim color.
+     * Signature is compatible with the dual-tone patch.
+     * The context parameter is unused here but required for compatibility with callers.
+     */
     @JvmStatic
     fun Resources.notificationScrim(blurSupported: Boolean, context: Context): Int {
         return if (blurSupported) {
@@ -47,7 +56,6 @@ object ShadeColors {
         return (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     }
 
-    @JvmStatic
     private fun Resources.shadePanelStandard(context: Context): Int {
         return if (isNightModeActive()) {
             shadePanelStandardDark(context)
@@ -57,67 +65,59 @@ object ShadeColors {
     }
 
     private fun Resources.shadePanelStandardLight(context: Context): Int {
-        val useDualTone = if (context != null) {
-            try {
-                Settings.System.getInt(context.contentResolver, Settings.System.QS_DUAL_TONE, 1) == 1
-            } catch (e: Exception) {
-                true // fallback to default
-            }
+        val useDualTone = Settings.System.getInt(context.contentResolver, Settings.System.QS_DUAL_TONE, 1) == 1
+
+        if (useDualTone) {
+            // High opacity pastel. A solid light base with a strong accent.
+            val topLayerAlpha = 0.40f // Strong accent for a clear pastel color
+            val layerAbove = ColorUtils.setAlphaComponent(
+                getColor(R.color.shade_panel_base, null),
+                (topLayerAlpha * 255).toInt()
+            )
+            // Highly opaque base to make the background solid.
+            val layerBelow = ColorUtils.setAlphaComponent(Color.WHITE, (0.90f * 255).toInt())
+            return ColorUtils.compositeColors(layerAbove, layerBelow)
         } else {
-            true // fallback to default when context is null
+            // Standard/Fallback logic when dual-tone is off
+            val layerAbove = ColorUtils.setAlphaComponent(
+                getColor(R.color.shade_panel_base, null),
+                (0.7f * 255).toInt()
+            )
+            val layerBelow = ColorUtils.setAlphaComponent(Color.WHITE, (0.14f * 255).toInt())
+            return ColorUtils.compositeColors(layerAbove, layerBelow)
         }
-
-        val topLayerAlpha = 0.75f
-
-        val layerAbove = ColorUtils.setAlphaComponent(
-            getColor(R.color.shade_panel_base, null),
-            (topLayerAlpha * 255).toInt()
-        )
-
-        val layerBelow = if (useDualTone) {
-            ColorUtils.setAlphaComponent(Color.WHITE, (0.1f * 255).toInt())
-        } else {
-            val colorBase = getColor(R.color.shade_panel_base_color, null)
-            ColorUtils.setAlphaComponent(colorBase, (0.1f * 255).toInt())
-        }
-
-        return ColorUtils.compositeColors(layerAbove, layerBelow)
     }
 
     private fun Resources.shadePanelStandardDark(context: Context): Int {
-        val useDualTone = if (context != null) {
-            try {
-                Settings.System.getInt(context.contentResolver, Settings.System.QS_DUAL_TONE, 1) == 1
-            } catch (e: Exception) {
-                true // fallback to default
-            }
+        val useDualTone = Settings.System.getInt(context.contentResolver, Settings.System.QS_DUAL_TONE, 1) == 1
+
+        if (useDualTone) {
+            // REVISED: The "sweet spot". Solid feel but with perceptible blur.
+            val topLayerAlpha = 0.10f // Subtle, premium tint
+            val layerAbove = ColorUtils.setAlphaComponent(
+                getColor(R.color.shade_panel_base, null),
+                (topLayerAlpha * 255).toInt()
+            )
+            // Reduced from 95% to allow some transparency for the blur effect.
+            val layerBelow = ColorUtils.setAlphaComponent(Color.BLACK, (0.88f * 255).toInt())
+            return ColorUtils.compositeColors(layerAbove, layerBelow)
         } else {
-            true // fallback to default when context is null
+            // REVISED: A new fallback logic that is opaque but more colorful.
+            val topLayerAlpha = 0.35f // A more vibrant accent color
+            val layerAbove = ColorUtils.setAlphaComponent(
+                getColor(R.color.shade_panel_base, null),
+                (topLayerAlpha * 255).toInt()
+            )
+            // A solid base to prevent it from being too transparent.
+            val layerBelow = ColorUtils.setAlphaComponent(Color.BLACK, (0.85f * 255).toInt())
+            return ColorUtils.compositeColors(layerAbove, layerBelow)
         }
-
-        val topLayerAlpha = 0.8f
-
-        val layerAbove = ColorUtils.setAlphaComponent(
-            getColor(R.color.shade_panel_base, null),
-            (topLayerAlpha * 255).toInt()
-        )
-
-        val layerBelow = if (useDualTone) {
-            ColorUtils.setAlphaComponent(Color.WHITE, (0.05f * 255).toInt())
-        } else {
-            val colorBase = getColor(R.color.shade_panel_base_color, null)
-            ColorUtils.setAlphaComponent(colorBase, (0.1f * 255).toInt())
-        }
-
-        return ColorUtils.compositeColors(layerAbove, layerBelow)
     }
 
-    @JvmStatic
     private fun Resources.shadePanelFallback(): Int {
-        return ColorUtils.blendARGB(getColor(R.color.nt_scrim_behind_1), getColor(R.color.nt_scrim_behind_2), 0.5f)
+        return ColorUtils.blendARGB(getColor(R.color.nt_scrim_behind_1), getColor(R.color.nt_scrim_behind_2), 0.3f)
     }
 
-    @JvmStatic
     private fun Resources.notificationScrimStandard(): Int {
         return if (isNightModeActive()) {
             notificationScrimStandardDark()
@@ -127,20 +127,23 @@ object ShadeColors {
     }
 
     private fun Resources.notificationScrimStandardLight(): Int {
-        return ColorUtils.setAlphaComponent(
+        val layerAbove = ColorUtils.setAlphaComponent(
             getColor(R.color.notification_scrim_base, null),
-            (0.6f * 255).toInt(),
+            (0.62f * 255).toInt()
         )
+        val layerBelow = ColorUtils.setAlphaComponent(Color.WHITE, (0.2f * 255).toInt())
+        return ColorUtils.compositeColors(layerAbove, layerBelow)
     }
 
     private fun Resources.notificationScrimStandardDark(): Int {
-        return ColorUtils.setAlphaComponent(
+        val layerAbove = ColorUtils.setAlphaComponent(
             getColor(R.color.notification_scrim_base, null),
-            (0.65f * 255).toInt(),
+            (0.65f * 255).toInt()
         )
+        val layerBelow = ColorUtils.setAlphaComponent(Color.WHITE, (0.2f * 255).toInt())
+        return ColorUtils.compositeColors(layerAbove, layerBelow)
     }
 
-    @JvmStatic
     private fun Resources.notificationScrimFallback(): Int {
         return getColor(R.color.notification_scrim_fallback, null)
     }
