@@ -147,6 +147,10 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     private final NotificationShadeWindowState.Buffer mStateBuffer =
             new NotificationShadeWindowState.Buffer(MAX_STATE_CHANGES_BUFFER_SIZE);
 
+    private boolean mIsBlurFullscreen = false;
+    private int mOriginalLpWidth;
+    private int mOriginalLpHeight;
+
     @Inject
     public NotificationShadeWindowControllerImpl(
             @ShadeDisplayAware Context context,
@@ -863,6 +867,30 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
         if (mCurrentState.backgroundBlurRadius == backgroundBlurRadius) {
             return;
         }
+        boolean shouldBeFullscreen = backgroundBlurRadius > 0;
+        if (shouldBeFullscreen != mIsBlurFullscreen) {
+            mIsBlurFullscreen = shouldBeFullscreen;
+            final LayoutParams lp = mLp;
+
+            if (lp != null) {
+                if (shouldBeFullscreen) {
+                    // Blur is starting. Save original size and go full-screen.
+                    mOriginalLpWidth = lp.width;
+                    mOriginalLpHeight = lp.height;
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                } else {
+                    // Blur is ending. Restore original size.
+                    lp.width = mOriginalLpWidth;
+                    lp.height = mOriginalLpHeight;
+                }
+                // Apply the new layout parameters to the window.
+                if (mWindowRootView != null) {
+                    mWindowManager.updateViewLayout(mWindowRootView, lp);
+                }
+            }
+        }
+
         mCurrentState.backgroundBlurRadius = backgroundBlurRadius;
         apply(mCurrentState);
     }
