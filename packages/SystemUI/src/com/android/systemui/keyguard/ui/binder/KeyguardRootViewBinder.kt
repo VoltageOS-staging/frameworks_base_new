@@ -199,7 +199,6 @@ object KeyguardRootViewBinder {
                             }
                             childViews[aodPromotedNotificationId]?.translationY = y
                             childViews[aodNotificationIconContainerId]?.translationY = y
-                            childViews[sliceViewId]?.translationY = y
                             childViews[weatherAreaId]?.translationY = y
                         }
                     }
@@ -214,7 +213,6 @@ object KeyguardRootViewBinder {
                                     childViews[sliceViewId]?.translationX = px
                                     childViews[aodPromotedNotificationId]?.translationX = px
                                     childViews[aodNotificationIconContainerId]?.translationX = px
-                                    childViews[sliceViewId]?.translationX = px
                                     childViews[weatherAreaId]?.translationX = px
                                 }
 
