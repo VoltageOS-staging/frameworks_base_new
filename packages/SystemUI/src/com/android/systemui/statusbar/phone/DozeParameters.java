@@ -333,7 +333,7 @@ public class DozeParameters implements
      * disabled for a11y.
      */
     public boolean shouldControlUnlockedScreenOff() {
-        return mUnlockedScreenOffAnimationController.shouldPlayUnlockedScreenOffAnimation();
+        return mUnlockedScreenOffAnimationController.shouldPlayAnimation();
     }
 
     public boolean shouldDelayKeyguardShow() {

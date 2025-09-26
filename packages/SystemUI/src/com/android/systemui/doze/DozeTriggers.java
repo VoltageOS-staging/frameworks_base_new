@@ -58,6 +58,7 @@ import com.android.systemui.util.sensors.AsyncSensorManager;
 import com.android.systemui.util.sensors.ProximityCheck;
 import com.android.systemui.util.sensors.ProximitySensor;
 import com.android.systemui.util.settings.SecureSettings;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.util.wakelock.WakeLock;
 
 import java.io.PrintWriter;
@@ -107,6 +108,7 @@ public class DozeTriggers implements DozeMachine.Part {
     private final UserTracker mUserTracker;
     private final SelectedUserInteractor mSelectedUserInteractor;
     private final UiEventLogger mUiEventLogger;
+    private final SystemSettings mSystemSettings;
 
     private long mNotificationPulseTime;
     private Runnable mAodInterruptRunnable;
@@ -206,6 +208,7 @@ public class DozeTriggers implements DozeMachine.Part {
             KeyguardStateController keyguardStateController,
             DevicePostureController devicePostureController,
             UserTracker userTracker,
+            SystemSettings systemSettings,
             SelectedUserInteractor selectedUserInteractor) {
         mContext = context;
         mDozeHost = dozeHost;
@@ -228,6 +231,7 @@ public class DozeTriggers implements DozeMachine.Part {
         mKeyguardStateController = keyguardStateController;
         mUserTracker = userTracker;
         mSelectedUserInteractor = selectedUserInteractor;
+	mSystemSettings = systemSettings;
     }
 
     @Override
@@ -471,6 +475,13 @@ public class DozeTriggers implements DozeMachine.Part {
             // DOZE_SUSPEND_TRIGGERS state.
             registerCallbacks();
         }
+
+        boolean glanceAodEnabled = mSystemSettings.getIntForUser(
+                "screen_off_aod_enabled", 0, mUserTracker.getUserId()) == 1;
+        boolean isAtGlanceAod = glanceAodEnabled && 
+                oldState == DozeMachine.State.INITIALIZED && 
+                newState == DozeMachine.State.DOZE_AOD;
+
         switch (newState) {
             case INITIALIZED:
                 mAodInterruptRunnable = null;
@@ -480,9 +491,9 @@ public class DozeTriggers implements DozeMachine.Part {
                 break;
             case DOZE:
                 mAodInterruptRunnable = null;
-                mWantProxSensor = false;
+                mWantProxSensor = isAtGlanceAod;
                 mWantSensors = true;
-                mWantTouchScreenSensors = true;
+                mWantTouchScreenSensors = isAtGlanceAod || true;
                 mInAod = false;
                 break;
             case DOZE_AOD:
@@ -490,7 +501,10 @@ public class DozeTriggers implements DozeMachine.Part {
                 mWantProxSensor = true;
                 mWantSensors = true;
                 mWantTouchScreenSensors = true;
-                mInAod = true;
+                mInAod = !isAtGlanceAod;
+                if (isAtGlanceAod) {
+                    mDozeSensors.setListening(true, true, false);
+                }
                 if (!sWakeDisplaySensorState) {
                     onWakeScreen(false, newState, DozeLog.REASON_SENSOR_WAKE_UP_PRESENCE);
                 }
@@ -517,7 +531,9 @@ public class DozeTriggers implements DozeMachine.Part {
                 break;
             default:
         }
-        mDozeSensors.setListening(mWantSensors, mWantTouchScreenSensors, mInAod);
+        if (!isAtGlanceAod || newState != DozeMachine.State.DOZE_AOD) {
+            mDozeSensors.setListening(mWantSensors, mWantTouchScreenSensors, mInAod);
+        }
     }
 
     private void registerCallbacks() {
@@ -548,10 +564,15 @@ public class DozeTriggers implements DozeMachine.Part {
     public void onScreenState(int state) {
         mDozeSensors.onScreenState(state);
         final boolean lowPowerStateOrOff = state == Display.STATE_DOZE
-                || state == Display.STATE_DOZE_SUSPEND || state == Display.STATE_OFF;
-        mDozeSensors.setProxListening(mWantProxSensor && lowPowerStateOrOff);
+                || state == Display.STATE_DOZE_SUSPEND 
+                || state == Display.STATE_OFF;
+
+        boolean keepSensorsActive = lowPowerStateOrOff || 
+                (state == Display.STATE_DOZE_SUSPEND && mMachine.getState() == DozeMachine.State.DOZE_AOD);
+
+        mDozeSensors.setProxListening(mWantProxSensor && keepSensorsActive);
         mDozeSensors.setListeningWithPowerState(mWantSensors, mWantTouchScreenSensors,
-                mInAod, lowPowerStateOrOff);
+                mInAod, keepSensorsActive);
 
         if (mAodInterruptRunnable != null && state == Display.STATE_ON) {
             mAodInterruptRunnable.run();
