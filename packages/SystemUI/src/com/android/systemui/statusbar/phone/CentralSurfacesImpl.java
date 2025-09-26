@@ -56,6 +56,7 @@ import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.graphics.Point;
 import android.hardware.devicestate.DeviceStateManager;
+import android.hardware.display.AmbientDisplayConfiguration;
 import android.metrics.LogMaker;
 import android.net.Uri;
 import android.os.Binder;
@@ -174,6 +175,7 @@ import com.android.systemui.settings.brightness.BrightnessSliderController;
 import com.android.systemui.settings.brightness.data.repository.BrightnessMirrorShowingRepository;
 import com.android.systemui.shade.CameraLauncher;
 import com.android.systemui.shade.GlanceableHubContainerController;
+import com.android.systemui.shade.NotificationPanelViewController;
 import com.android.systemui.shade.NotificationShadeWindowView;
 import com.android.systemui.shade.NotificationShadeWindowViewController;
 import com.android.systemui.shade.QuickSettingsController;
@@ -241,6 +243,7 @@ import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.surfaceeffects.ripple.RippleShader.RippleShape;
 import com.android.systemui.util.DumpUtilsKt;
+import com.android.systemui.util.ScreenAnimationController;
 import com.android.systemui.util.MediaArtUtils;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.WallpaperDepthUtils;
@@ -439,6 +442,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     private final ConfigurationController mConfigurationController;
     private final Lazy<NotificationShadeWindowViewController>
             mNotificationShadeWindowViewControllerLazy;
+    private final Lazy<NotificationPanelViewController> mPanelViewControllerLazy;
     private final DozeParameters mDozeParameters;
     private final Lazy<BiometricUnlockController> mBiometricUnlockControllerLazy;
     private final PluginManager mPluginManager;
@@ -754,6 +758,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             QuickAccessWalletController walletController,
             WindowManager windowManager,
             WindowManagerProvider windowManagerProvider,
+            Lazy<NotificationPanelViewController> panelViewControllerLazy,
             BurnInProtectionController burnInProtectionController
     ) {
         mContext = context;
@@ -806,6 +811,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mConfigurationController = configurationController;
         mNotificationShadeWindowController = notificationShadeWindowController;
         mNotificationShadeWindowViewControllerLazy = notificationShadeWindowViewControllerLazy;
+        mPanelViewControllerLazy = panelViewControllerLazy;
         mStackScrollerController = notificationStackScrollLayoutController;
         mStackScroller = mStackScrollerController.getView();
         mNotifListContainer = mStackScrollerController.getNotificationListContainer();
@@ -899,6 +905,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         mWindowManager = windowManager;
         mWindowManagerProvider = windowManagerProvider;
+        ScreenAnimationController.INSTANCE().init(new AmbientDisplayConfiguration(mContext));
         mMediaArtUtils = MediaArtUtils.getInstance(mContext);
         mWallpaperDepthUtils = WallpaperDepthUtils.getInstance(mContext);
         NTForbiddenSwipeDownQSController.Companion.init(mContext, mKeyguardStateController);
@@ -2670,6 +2677,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             String tag = "CentralSurfaces#onStartedGoingToSleep";
             DejankUtils.startDetectingBlockingIpcs(tag);
 
+            NotificationPanelViewController panelVC = mPanelViewControllerLazy.get();
+            boolean isPanelExpanded = panelVC != null && !panelVC.isPanelCollapsed();
+            ScreenAnimationController.INSTANCE().setPanelExpanded(isPanelExpanded);
+
             //  cancel stale runnables that could put the device in the wrong state
             cancelAfterLaunchTransitionRunnables();
 
@@ -2692,6 +2703,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         @Override
         public void onStartedWakingUp() {
+            ScreenAnimationController.INSTANCE().setPanelExpanded(false);
+
             // Between onStartedWakingUp() and onFinishedWakingUp(), the system is changing the
             // display power mode. To avoid jank, animations should NOT run during these power
             // mode transitions, which means that whenever possible, animations should

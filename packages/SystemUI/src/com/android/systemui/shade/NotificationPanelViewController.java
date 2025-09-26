@@ -4408,4 +4408,7 @@ public final class NotificationPanelViewController implements
             return super.performAccessibilityAction(host, action, args);
         }
     }
+        public boolean isPanelCollapsed() {
+            return mExpandedFraction <= 0.0f;
+       }
 }
