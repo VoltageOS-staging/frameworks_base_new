@@ -37,6 +37,8 @@ import com.android.systemui.statusbar.notification.stack.AnimationProperties
 import com.android.systemui.statusbar.notification.stack.StackStateAnimator
 import com.android.systemui.statusbar.policy.KeyguardStateController
 import com.android.systemui.util.NTBoosterController
+import com.android.systemui.util.ScreenAnimationController
+import com.android.systemui.util.settings.SystemSettings
 import com.android.systemui.util.settings.GlobalSettings
 import dagger.Lazy
 import javax.inject.Inject
@@ -73,6 +75,7 @@ constructor(
     private val powerManager: PowerManager,
     private val shadeLockscreenInteractorLazy: Lazy<ShadeLockscreenInteractor>,
     private val panelExpansionInteractorLazy: Lazy<PanelExpansionInteractor>,
+    private val systemSettings: SystemSettings,
     @Main private val handler: Handler,
 ) : WakefulnessLifecycle.Observer, ScreenOffAnimation {
     private lateinit var centralSurfaces: CentralSurfaces
@@ -282,7 +285,7 @@ constructor(
     }
 
     override fun startAnimation(): Boolean {
-        if (shouldPlayUnlockedScreenOffAnimation()) {
+        if (shouldPlayAnimation()) {
             decidedToAnimateGoingToSleep = true
 
             shouldAnimateInKeyguard = true
@@ -327,7 +330,7 @@ constructor(
      * Whether we want to play the screen off animation when the phone starts going to sleep, based
      * on the current state of the device.
      */
-    fun shouldPlayUnlockedScreenOffAnimation(): Boolean {
+    private fun shouldPlayUnlockedScreenOffAnimationInternal(): Boolean {
         // If we haven't been initialized yet, we don't have a StatusBar/LightRevealScrim yet, so we
         // can't perform the animation.
         if (!initialized) {
@@ -389,8 +392,11 @@ constructor(
         return true
     }
 
-    override fun shouldDelayDisplayDozeTransition(): Boolean =
-        shouldPlayUnlockedScreenOffAnimation()
+    override fun shouldDelayDisplayDozeTransition(): Boolean = shouldPlayAnimation()
+
+    override fun shouldPlayAnimation(): Boolean {
+        return ScreenAnimationController.INSTANCE().shouldPlayAnimation() && shouldPlayUnlockedScreenOffAnimationInternal()
+    }
 
     /**
      * Whether we're doing the light reveal animation or we're done with that and animating in the
@@ -405,13 +411,11 @@ constructor(
     override fun shouldHideScrimOnWakeUp(): Boolean = isScreenOffLightRevealAnimationPlaying()
 
     override fun overrideNotificationsDozeAmount(): Boolean =
-        shouldPlayUnlockedScreenOffAnimation() && isAnimationPlaying()
+        shouldPlayAnimation() && isAnimationPlaying()
 
     override fun shouldShowAodIconsWhenShade(): Boolean = isAnimationPlaying()
 
-    override fun shouldAnimateAodIcons(): Boolean = shouldPlayUnlockedScreenOffAnimation()
-
-    override fun shouldPlayAnimation(): Boolean = shouldPlayUnlockedScreenOffAnimation()
+    override fun shouldAnimateAodIcons(): Boolean = shouldPlayAnimation()
 
     /**
      * Whether the light reveal animation is playing. The second part of the screen off animation,

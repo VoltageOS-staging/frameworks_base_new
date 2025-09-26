@@ -39,6 +39,7 @@ import com.android.systemui.doze.dagger.WrappedService;
 import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.keyguard.domain.interactor.DozeInteractor;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.util.wakelock.SettableWakeLock;
 import com.android.systemui.util.wakelock.WakeLock;
 
@@ -84,6 +85,7 @@ public class DozeScreenState implements DozeMachine.Part {
     private final DozeScreenBrightness mDozeScreenBrightness;
     private final SelectedUserInteractor mSelectedUserInteractor;
     private final DozeInteractor mDozeInteractor;
+    private final SystemSettings mSystemSettings;
 
     private int mPendingScreenState = Display.STATE_UNKNOWN;
     private SettableWakeLock mWakeLock;
@@ -100,7 +102,8 @@ public class DozeScreenState implements DozeMachine.Part {
             DozeLog dozeLog,
             DozeScreenBrightness dozeScreenBrightness,
             DozeInteractor dozeInteractor,
-            SelectedUserInteractor selectedUserInteractor) {
+            SelectedUserInteractor selectedUserInteractor,
+            SystemSettings systemSettings) {
         mDozeService = service;
         mHandler = handler;
         mParameters = parameters;
@@ -112,6 +115,7 @@ public class DozeScreenState implements DozeMachine.Part {
         mDozeScreenBrightness = dozeScreenBrightness;
         mSelectedUserInteractor = selectedUserInteractor;
         mDozeInteractor = dozeInteractor;
+        mSystemSettings = systemSettings;
 
         updateUdfpsController();
         if (mUdfpsController == null) {
@@ -136,6 +140,13 @@ public class DozeScreenState implements DozeMachine.Part {
     public void transitionTo(DozeMachine.State oldState, DozeMachine.State newState) {
         int screenState = newState.screenState(mParameters);
         mDozeHost.cancelGentleSleep();
+
+        boolean showAodOnScreenOff = mSystemSettings.getIntForUser(
+                "screen_off_aod_enabled", 0, android.os.UserHandle.USER_CURRENT) == 1;
+        if (newState == DozeMachine.State.DOZE && !showAodOnScreenOff) {
+            mDozeService.setDozeScreenState(Display.STATE_OFF);
+            return;
+        }
 
         if (newState == DozeMachine.State.FINISH) {
             // Make sure not to apply the screen state after DozeService was destroyed.
