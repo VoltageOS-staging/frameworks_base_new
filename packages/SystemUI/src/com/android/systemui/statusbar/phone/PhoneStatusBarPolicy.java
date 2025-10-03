@@ -365,7 +365,7 @@ public class PhoneStatusBarPolicy
         // network traffic
         mShowNetworkTraffic = Settings.System.getIntForUser(mContext.getContentResolver(),
             NETWORK_TRAFFIC_ENABLED, 0, UserHandle.USER_CURRENT) == 1;
-        updateNetworkTraffic();
+        mIconController.setNetworkTraffic(mSlotNetworkTraffic);
 
         // firewall
         mIconController.setIcon(mSlotFirewall, R.drawable.stat_sys_firewall, null);
@@ -621,8 +621,11 @@ public class PhoneStatusBarPolicy
     }
 
     private final void updateNetworkTraffic() {
-        mIconController.setNetworkTraffic(mSlotNetworkTraffic, new NetworkTrafficState(mShowNetworkTraffic));
-        mIconController.setIconVisibility(mSlotNetworkTraffic, mShowNetworkTraffic);
+        if (mShowNetworkTraffic) {
+            mIconController.setNetworkTraffic(mSlotNetworkTraffic);
+        } else {
+            mIconController.removeIcon(mSlotNetworkTraffic, 0);
+        }
     }
 
     private final void updateTTY() {
@@ -913,18 +916,5 @@ public class PhoneStatusBarPolicy
         }
 
         mIconController.setIconVisibility(mSlotConnectedDisplay, visible);
-    }
-
-    public static class NetworkTrafficState {
-        public boolean visible;
-
-        public NetworkTrafficState(boolean visible) {
-            this.visible = visible;
-        }
-
-        @Override
-        public String toString() {
-            return "NetworkTrafficState(visible=" + visible + ")";
-        }
     }
 }
