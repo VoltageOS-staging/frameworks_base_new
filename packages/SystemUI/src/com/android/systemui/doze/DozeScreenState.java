@@ -217,10 +217,11 @@ public class DozeScreenState implements DozeMachine.Part {
             if (shouldDelayTransitionEnteringDoze || shouldDelayTransitionForUDFPS) {
                 mWakeLock.setAcquired(true);
             }
-        } else if (turningOff) {
-            mDozeHost.prepareForGentleSleep(() -> applyScreenState(screenState));
+	    } else if (turningOff) {
+                final int finalScreenState = screenState;
+                mDozeHost.prepareForGentleSleep(() -> applyScreenState(finalScreenState));
         } else {
-            applyScreenState(screenState);
+                applyScreenState(screenState);
         }
     }
 

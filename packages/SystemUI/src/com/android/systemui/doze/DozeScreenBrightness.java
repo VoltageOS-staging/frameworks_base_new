@@ -309,7 +309,7 @@ public class DozeScreenBrightness extends BroadcastReceiver implements DozeMachi
         } else {
             mDozeService.setDozeScreenBrightness(
                     clampToDimBrightnessForScreenOff(
-                            clampToUserSettingOrAutoBrightness(getDozeBrightnessValue)));
+                            clampToUserSettingOrAutoBrightness(getDozeBrightnessValue())));
         }
         mDozeHost.setAodDimmingScrim(0f);
     }
