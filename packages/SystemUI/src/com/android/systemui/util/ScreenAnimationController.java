@@ -23,13 +23,20 @@ public class ScreenAnimationController {
     public void setPanelExpanded(boolean expanded) {
         mPanelExpandedWhenScreenOff = expanded;
     }
-    
+
     public void init(AmbientDisplayConfiguration ambientConfig) {
         mAmbientDisplayConfiguration = ambientConfig;
     }
 
     public boolean shouldPlayAnimation() {
-        boolean aodEnabled = mAmbientDisplayConfiguration != null && mAmbientDisplayConfiguration.enabled(ActivityManager.getCurrentUser());
-        return !mPanelExpandedWhenScreenOff && aodEnabled;
+        if (mPanelExpandedWhenScreenOff) {
+            return false;
+        }
+
+        if (mAmbientDisplayConfiguration == null) {
+            return false;
+        }
+
+        return mAmbientDisplayConfiguration.alwaysOnEnabled(ActivityManager.getCurrentUser());
     }
 }

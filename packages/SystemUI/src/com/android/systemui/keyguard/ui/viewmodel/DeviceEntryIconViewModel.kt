@@ -221,7 +221,7 @@ constructor(
             isUnlocked ->
             if (isListeningForUdfps) {
                 val showAodOnScreenOff = systemSettings.getIntForUser(
-                        "screen_off_aod_enabled", 1, android.os.UserHandle.USER_CURRENT) == 1
+                        "screen_off_aod_enabled", 0, android.os.UserHandle.USER_CURRENT) == 1
                 if (isUnlocked && !showAodOnScreenOff) {
                     // Don't show any UI until isUnlocked=false. This covers the case
                     // when the "Power button instantly locks > 0s" or the device doesn't lock

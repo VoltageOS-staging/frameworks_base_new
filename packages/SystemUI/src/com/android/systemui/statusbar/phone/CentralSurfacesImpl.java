@@ -2678,8 +2678,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             DejankUtils.startDetectingBlockingIpcs(tag);
 
             NotificationPanelViewController panelVC = mPanelViewControllerLazy.get();
-            boolean isPanelExpanded = panelVC != null && !panelVC.isPanelCollapsed();
-            ScreenAnimationController.INSTANCE().setPanelExpanded(isPanelExpanded);
+            if (panelVC != null) {
+                ScreenAnimationController.INSTANCE().setPanelExpanded(!panelVC.isPanelCollapsed());
+            }
 
             //  cancel stale runnables that could put the device in the wrong state
             cancelAfterLaunchTransitionRunnables();

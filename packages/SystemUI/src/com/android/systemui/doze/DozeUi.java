@@ -62,6 +62,7 @@ public class DozeUi implements DozeMachine.Part {
     private final DelayableExecutor mBgExecutor;
     private final SystemSettings mSystemSettings;
     private final UserTracker mUserTracker;
+    private Runnable mAodGlanceTimeout;
     private volatile long mLastTimeTickElapsed = 0;
     // If time tick is scheduled and there's not a pending runnable to cancel:
     private volatile boolean mTimeTickScheduled;
@@ -128,14 +129,18 @@ public class DozeUi implements DozeMachine.Part {
 
     @Override
     public void transitionTo(DozeMachine.State oldState, DozeMachine.State newState) {
-        mHandler.removeCallbacks(mAodTask);
+        if (mAodGlanceTimeout != null) {
+            mHandler.removeCallbacks(mAodGlanceTimeout);
+            mAodGlanceTimeout = null;
+        }
 
-        if (oldState == DozeMachine.State.INITIALIZED && newState.isAlwaysOn()) {
+        if (oldState == DozeMachine.State.INITIALIZED && newState == DozeMachine.State.DOZE_AOD) {
             boolean glanceAodEnabled = mSystemSettings.getIntForUser(
                     "screen_off_aod_enabled", 0, mUserTracker.getUserId()) == 1;
 
             if (glanceAodEnabled) {
-                mHandler.postDelayed(mAodTask, AOD_GLANCE_TIMEOUT_MS);
+                mAodGlanceTimeout = mAodTask;
+                mHandler.postDelayed(mAodGlanceTimeout, AOD_GLANCE_TIMEOUT_MS);
             }
         }
 

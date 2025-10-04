@@ -143,9 +143,8 @@ public class DozeScreenState implements DozeMachine.Part {
 
         boolean showAodOnScreenOff = mSystemSettings.getIntForUser(
                 "screen_off_aod_enabled", 0, android.os.UserHandle.USER_CURRENT) == 1;
-        if (newState == DozeMachine.State.DOZE && !showAodOnScreenOff) {
-            mDozeService.setDozeScreenState(Display.STATE_OFF);
-            return;
+        if (!showAodOnScreenOff && newState == DozeMachine.State.DOZE_AOD_PAUSED) {
+            screenState = Display.STATE_OFF;
         }
 
         if (newState == DozeMachine.State.FINISH) {
