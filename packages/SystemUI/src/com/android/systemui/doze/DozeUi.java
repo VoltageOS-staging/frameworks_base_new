@@ -32,11 +32,9 @@ import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.doze.dagger.DozeScope;
 import com.android.systemui.statusbar.phone.DozeParameters;
-import com.android.systemui.settings.UserTracker;
 import com.android.systemui.util.AlarmTimeout;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.wakelock.WakeLock;
-import com.android.systemui.util.settings.SystemSettings;
 
 import java.util.Calendar;
 
@@ -48,21 +46,16 @@ import javax.inject.Inject;
 @DozeScope
 public class DozeUi implements DozeMachine.Part {
     private static final long TIME_TICK_DEADLINE_MILLIS = 90 * 1000; // 1.5min
-    private static final long AOD_GLANCE_TIMEOUT_MS = 10000; // 10 seconds
     private final Context mContext;
     private final DozeHost mHost;
     private final Handler mHandler;
     private final WakeLock mWakeLock;
     private DozeMachine mMachine;
-    private final Runnable mAodTask = () -> mMachine.requestState(DozeMachine.State.DOZE);
     private final AlarmTimeout mTimeTicker;
     private final boolean mCanAnimateTransition;
     private final DozeParameters mDozeParameters;
     private final DozeLog mDozeLog;
     private final DelayableExecutor mBgExecutor;
-    private final SystemSettings mSystemSettings;
-    private final UserTracker mUserTracker;
-    private Runnable mAodGlanceTimeout;
     private volatile long mLastTimeTickElapsed = 0;
     // If time tick is scheduled and there's not a pending runnable to cancel:
     private volatile boolean mTimeTickScheduled;
@@ -82,9 +75,7 @@ public class DozeUi implements DozeMachine.Part {
             @Background Handler bgHandler,
             DozeParameters params,
             @Background DelayableExecutor bgExecutor,
-            DozeLog dozeLog,
-            SystemSettings systemSettings,
-            UserTracker userTracker) {
+            DozeLog dozeLog) {
         mContext = context;
         mWakeLock = wakeLock;
         mHost = host;
@@ -94,8 +85,6 @@ public class DozeUi implements DozeMachine.Part {
         mDozeParameters = params;
         mTimeTicker = new AlarmTimeout(alarmManager, this::onTimeTick, "doze_time_tick", bgHandler);
         mDozeLog = dozeLog;
-        mSystemSettings = systemSettings;
-        mUserTracker = userTracker;
     }
 
     @Override
@@ -129,21 +118,6 @@ public class DozeUi implements DozeMachine.Part {
 
     @Override
     public void transitionTo(DozeMachine.State oldState, DozeMachine.State newState) {
-        if (mAodGlanceTimeout != null) {
-            mHandler.removeCallbacks(mAodGlanceTimeout);
-            mAodGlanceTimeout = null;
-        }
-
-        if (oldState == DozeMachine.State.INITIALIZED && newState == DozeMachine.State.DOZE_AOD) {
-            boolean glanceAodEnabled = mSystemSettings.getIntForUser(
-                    "screen_off_aod_enabled", 0, mUserTracker.getUserId()) == 1;
-
-            if (glanceAodEnabled) {
-                mAodGlanceTimeout = mAodTask;
-                mHandler.postDelayed(mAodGlanceTimeout, AOD_GLANCE_TIMEOUT_MS);
-            }
-        }
-
         switch (newState) {
             case DOZE_AOD:
             case DOZE_AOD_DOCKED:
