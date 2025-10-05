@@ -56,6 +56,7 @@ import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.graphics.Point;
 import android.hardware.devicestate.DeviceStateManager;
+import android.hardware.display.DisplayManager;
 import android.hardware.display.AmbientDisplayConfiguration;
 import android.metrics.LogMaker;
 import android.net.Uri;
@@ -905,7 +906,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         mWindowManager = windowManager;
         mWindowManagerProvider = windowManagerProvider;
-        ScreenAnimationController.INSTANCE().init(new AmbientDisplayConfiguration(mContext));
+        ScreenAnimationController.INSTANCE().init(
+                new AmbientDisplayConfiguration(mContext),
+                (DisplayManager) context.getSystemService("display")
+        );
         mMediaArtUtils = MediaArtUtils.getInstance(mContext);
         mWallpaperDepthUtils = WallpaperDepthUtils.getInstance(mContext);
         NTForbiddenSwipeDownQSController.Companion.init(mContext, mKeyguardStateController);
@@ -2464,14 +2468,17 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         }
         Trace.beginSection("CentralSurfaces#updateDozingState");
 
-        boolean keyguardVisible = mKeyguardStateController.isVisible();
-        // If we're dozing and we'll be animating the screen off, the keyguard isn't currently
-        // visible but will be shortly for the animation, so we should proceed as if it's visible.
-        boolean keyguardVisibleOrWillBe =
-                keyguardVisible || (mDozing && mDozeParameters.shouldDelayKeyguardShow());
-
-        boolean animate = (!mDozing && shouldAnimateDozeWakeup())
-                || (mDozing && mDozeParameters.shouldControlScreenOff() && keyguardVisibleOrWillBe);
+        boolean animate = false;
+        boolean keyguardVisibleOrWillBe = mKeyguardStateController.isVisible()
+                || (mDozing && mDozeParameters.shouldDelayKeyguardShow());
+        boolean canAnimate = (!mDozing && shouldAnimateDozeWakeup() && mPowerManager.isInteractive())
+                || (mDozing && mDozeParameters.shouldControlScreenOff() && keyguardVisibleOrWillBe
+                && mDozeServiceHost.getDozingRequested());
+        if (!ScreenAnimationController.INSTANCE().isPanelExpandedWhenScreenOff()
+                && !ScreenAnimationController.INSTANCE().isLandscapeScreenOff()) {
+            animate = mBiometricUnlockController.getMode()
+                    == BiometricUnlockController.MODE_WAKE_AND_UNLOCK || canAnimate;
+        }
 
         mShadeSurface.setDozing(mDozing, animate);
         mPulseController.setDozing(mDozing);
@@ -2679,7 +2686,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
             NotificationPanelViewController panelVC = mPanelViewControllerLazy.get();
             boolean isPanelExpanded = panelVC != null && !panelVC.isPanelCollapsed();
-            ScreenAnimationController.INSTANCE().setPanelExpanded(isPanelExpanded);
+            boolean isLandscape = mContext.getResources().getConfiguration().orientation == 2;
+            ScreenAnimationController.INSTANCE().updateCsfStates(isPanelExpanded, isLandscape,
+                    mWakefulnessLifecycle.getLastSleepReason() == PowerManager.GO_TO_SLEEP_REASON_POWER_BUTTON);
 
             //  cancel stale runnables that could put the device in the wrong state
             cancelAfterLaunchTransitionRunnables();
@@ -2703,6 +2712,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         @Override
         public void onStartedWakingUp() {
+            ScreenAnimationController.INSTANCE().updateCsfStates(false, false, false);
+
             ScreenAnimationController.INSTANCE().setPanelExpanded(false);
 
             // Between onStartedWakingUp() and onFinishedWakingUp(), the system is changing the
@@ -2717,7 +2728,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 updateIsKeyguard();
                 // TODO(b/301913237): can't delay transition if config_displayBlanksAfterDoze=true,
                 // otherwise, the clock will flicker during LOCKSCREEN_TRANSITION_FROM_AOD
-                mShouldDelayLockscreenTransitionFromAod = mDozeParameters.getAlwaysOn()
+                mShouldDelayLockscreenTransitionFromAod = (mDozeParameters.getAlwaysOn()
+                        || ScreenAnimationController.INSTANCE().shouldPlayAnimation())
                         && !mDozeParameters.getDisplayNeedsBlanking();
                 if (!mShouldDelayLockscreenTransitionFromAod) {
                     startLockscreenTransitionFromAod();
@@ -2982,6 +2994,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     protected AccessibilityManager mAccessibilityManager;
 
     protected boolean mDeviceInteractive;
+    private boolean mIsPressSleepButton = false;
 
     private final PowerManager mPowerManager;
     protected StatusBarKeyguardViewManager mStatusBarKeyguardViewManager;

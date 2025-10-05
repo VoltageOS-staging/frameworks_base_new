@@ -57,6 +57,7 @@ import com.android.systemui.statusbar.policy.DevicePostureController;
 import com.android.systemui.tuner.TunerService;
 import com.android.systemui.unfold.FoldAodAnimationController;
 import com.android.systemui.unfold.SysUIUnfoldComponent;
+import com.android.systemui.util.ScreenAnimationController;
 import com.android.systemui.util.settings.SecureSettings;
 
 import java.io.PrintWriter;
@@ -308,11 +309,10 @@ public class DozeParameters implements
     }
 
     public void updateControlScreenOff() {
-        if (!getDisplayNeedsBlanking()) {
-            final boolean controlScreenOff =
-                    getAlwaysOn() && (mKeyguardVisible || shouldControlUnlockedScreenOff());
-            setControlScreenOffAnimation(controlScreenOff);
+        if (getDisplayNeedsBlanking()) {
+            return;
         }
+        setControlScreenOffAnimation(getAlwaysOn() && (mKeyguardVisible || shouldControlUnlockedScreenOff()));
     }
 
     /**

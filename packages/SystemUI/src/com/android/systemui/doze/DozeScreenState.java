@@ -38,6 +38,7 @@ import com.android.systemui.doze.dagger.DozeScope;
 import com.android.systemui.doze.dagger.WrappedService;
 import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.keyguard.domain.interactor.DozeInteractor;
+import com.android.systemui.util.ScreenAnimationController;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
 import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.util.wakelock.SettableWakeLock;
@@ -141,13 +142,6 @@ public class DozeScreenState implements DozeMachine.Part {
         int screenState = newState.screenState(mParameters);
         mDozeHost.cancelGentleSleep();
 
-        boolean showAodOnScreenOff = mSystemSettings.getIntForUser(
-                "screen_off_aod_enabled", 0, android.os.UserHandle.USER_CURRENT) == 1;
-        if (newState == DozeMachine.State.DOZE && !showAodOnScreenOff) {
-            mDozeService.setDozeScreenState(Display.STATE_OFF);
-            return;
-        }
-
         if (newState == DozeMachine.State.FINISH) {
             // Make sure not to apply the screen state after DozeService was destroyed.
             mPendingScreenState = Display.STATE_UNKNOWN;
@@ -170,53 +164,44 @@ public class DozeScreenState implements DozeMachine.Part {
         final boolean turningOff = (oldState.isAlwaysOn() && newState == DOZE)
                 || (oldState == DOZE_AOD_PAUSING && newState == DOZE_AOD_PAUSED);
         final boolean justInitialized = oldState == DozeMachine.State.INITIALIZED;
-        if (messagePending || justInitialized || pulseEnding || turningOn) {
+        boolean shouldAnimate = (newState == DozeMachine.State.DOZE
+                || (newState == DozeMachine.State.DOZE_AOD && oldState != DozeMachine.State.DOZE))
+                && ScreenAnimationController.INSTANCE().shouldPlayAnimation();
+
+        if (messagePending || justInitialized || pulseEnding || turningOn || shouldAnimate) {
             // During initialization, we hide the navigation bar. That is however only applied after
             // a traversal; setting the screen state here is immediate however, so it can happen
             // that the screen turns on again before the navigation bar is hidden. To work around
             // that, wait for a traversal to happen before applying the initial screen state.
             mPendingScreenState = screenState;
 
-            // Delay screen state transitions even longer while animations are running.
-            boolean shouldDelayTransitionEnteringDoze = newState == DOZE_AOD
-                    && mParameters.shouldDelayDisplayDozeTransition() && !turningOn;
-
-            // Delay screen state transition longer if UDFPS is actively authenticating a fp
-            boolean shouldDelayTransitionForUDFPS = newState == DOZE_AOD
-                    && mUdfpsController != null && mUdfpsController.isFingerDown();
-
             if (!messagePending) {
-                if (DEBUG) {
-                    Log.d(TAG, "Display state changed to " + screenState + " delayed by "
-                            + (shouldDelayTransitionEnteringDoze ? ENTER_DOZE_DELAY : 1));
-                }
+               // Delay screen state transitions even longer while animations are running.
+                boolean shouldDelayTransitionEnteringDoze = newState == DOZE_AOD
+                        && mParameters.shouldDelayDisplayDozeTransition() && !turningOn;
+                // Delay screen state transition longer if UDFPS is actively authenticating a fp
+                boolean shouldDelayTransitionForUDFPS = newState == DOZE_AOD
+                        && mUdfpsController != null && mUdfpsController.isFingerDown();
 
-                if (shouldDelayTransitionEnteringDoze) {
+                if (shouldAnimate) {
+                   // Animate the screen turning off.
                     if (justInitialized) {
-                        // If we are delaying transitioning to doze and the display was not
-                        // turned on we set it to 'on' first to make sure that the animation
-                        // is visible before eventually moving it to doze state.
-                        // The display might be off at this point for example on foldable devices
-                        // when we switch displays and go to doze at the same time.
                         applyScreenState(Display.STATE_ON);
-
-                        // Restore pending screen state as it gets cleared by 'applyScreenState'
                         mPendingScreenState = screenState;
                     }
-
                     mHandler.postDelayed(mApplyPendingScreenState, ENTER_DOZE_DELAY);
+                    mWakeLock.setAcquired(true);
+                } else if (shouldDelayTransitionEnteringDoze) {
+                     // Delay transition to doze, for example to show LightReveal scrim.
+                    mHandler.postDelayed(mApplyPendingScreenState, ENTER_DOZE_DELAY);
+                     mWakeLock.setAcquired(true);
                 } else if (shouldDelayTransitionForUDFPS) {
                     mDozeLog.traceDisplayStateDelayedByUdfps(mPendingScreenState);
                     mHandler.postDelayed(mApplyPendingScreenState, UDFPS_DISPLAY_STATE_DELAY);
+                    mWakeLock.setAcquired(true);
                 } else {
                     mHandler.post(mApplyPendingScreenState);
                 }
-            } else if (DEBUG) {
-                Log.d(TAG, "Pending display state change to " + screenState);
-            }
-
-            if (shouldDelayTransitionEnteringDoze || shouldDelayTransitionForUDFPS) {
-                mWakeLock.setAcquired(true);
             }
         } else if (turningOff) {
             mDozeHost.prepareForGentleSleep(() -> applyScreenState(screenState));

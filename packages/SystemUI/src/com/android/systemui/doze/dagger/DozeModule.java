@@ -36,6 +36,7 @@ import com.android.systemui.doze.DozeTransitionListener;
 import com.android.systemui.doze.DozeTriggers;
 import com.android.systemui.doze.DozeUi;
 import com.android.systemui.doze.DozeWallpaperState;
+import com.android.systemui.settings.UserTracker;
 import com.android.systemui.res.R;
 import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.statusbar.policy.DevicePostureController;
@@ -43,6 +44,7 @@ import com.android.systemui.util.sensors.AsyncSensorManager;
 import com.android.systemui.util.wakelock.DelayedWakeLock;
 import com.android.systemui.util.wakelock.WakeLock;
 
+import com.android.systemui.util.settings.SystemSettings;
 import dagger.Module;
 import dagger.Provides;
 

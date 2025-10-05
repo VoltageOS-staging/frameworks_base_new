@@ -33,6 +33,7 @@ import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.doze.dagger.DozeScope;
 import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.settings.UserTracker;
+import com.android.systemui.util.ScreenAnimationController;
 import com.android.systemui.util.AlarmTimeout;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.wakelock.WakeLock;
@@ -130,11 +131,11 @@ public class DozeUi implements DozeMachine.Part {
     public void transitionTo(DozeMachine.State oldState, DozeMachine.State newState) {
         mHandler.removeCallbacks(mAodTask);
 
-        if (oldState == DozeMachine.State.INITIALIZED && newState.isAlwaysOn()) {
+        if (newState == DozeMachine.State.DOZE_AOD) {
             boolean glanceAodEnabled = mSystemSettings.getIntForUser(
                     "screen_off_aod_enabled", 0, mUserTracker.getUserId()) == 1;
 
-            if (glanceAodEnabled) {
+            if (glanceAodEnabled && !mDozeParameters.getAlwaysOn()) {
                 mHandler.postDelayed(mAodTask, AOD_GLANCE_TIMEOUT_MS);
             }
         }
@@ -186,7 +187,9 @@ public class DozeUi implements DozeMachine.Part {
                 // Keep current state.
                 break;
             default:
-                mHost.setAnimateWakeup(mCanAnimateTransition && mDozeParameters.getAlwaysOn());
+                mHost.setAnimateWakeup(mCanAnimateTransition
+                        && (mDozeParameters.getAlwaysOn()
+                        || ScreenAnimationController.INSTANCE().shouldPlayAnimation()));
                 break;
         }
     }

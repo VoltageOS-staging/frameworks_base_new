@@ -33,6 +33,7 @@ import com.android.systemui.doze.dagger.WrappedService;
 import com.android.systemui.keyguard.WakefulnessLifecycle;
 import com.android.systemui.keyguard.WakefulnessLifecycle.Wakefulness;
 import com.android.systemui.settings.UserTracker;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.util.Assert;
 import com.android.systemui.util.wakelock.WakeLock;
@@ -150,6 +151,7 @@ public class DozeMachine {
     private final DockManager mDockManager;
     private final Part[] mParts;
     private final UserTracker mUserTracker;
+    private final SystemSettings mSystemSettings;
     private final ArrayList<State> mQueuedRequests = new ArrayList<>();
     private State mState = State.UNINITIALIZED;
     private int mPulseReason;
@@ -160,8 +162,9 @@ public class DozeMachine {
     public DozeMachine(@WrappedService Service service,
             AmbientDisplayConfiguration ambientDisplayConfig,
             WakeLock wakeLock, WakefulnessLifecycle wakefulnessLifecycle,
-            DozeLog dozeLog, DockManager dockManager,
-            DozeHost dozeHost, Part[] parts, UserTracker userTracker) {
+            DozeLog dozeLog, DockManager dockManager, DozeHost dozeHost,
+            Part[] parts, UserTracker userTracker,
+            SystemSettings systemSettings) {
         mDozeService = service;
         mAmbientDisplayConfig = ambientDisplayConfig;
         mWakefulnessLifecycle = wakefulnessLifecycle;
@@ -171,6 +174,7 @@ public class DozeMachine {
         mDozeHost = dozeHost;
         mParts = parts;
         mUserTracker = userTracker;
+        mSystemSettings = systemSettings;
         for (Part part : parts) {
             part.setDozeMachine(this);
         }
@@ -429,8 +433,12 @@ public class DozeMachine {
                         || wakefulness == WAKEFULNESS_WAKING)) {
                     nextState = State.FINISH;
                 } else if (mDockManager.isDocked()) {
-                    nextState = mDockManager.isHidden() ? State.DOZE : State.DOZE_AOD_DOCKED;
+                    nextState = mDockManager.isHidden() ? State.DOZE
+                            : State.DOZE_AOD_DOCKED;
                 } else if (mAmbientDisplayConfig.alwaysOnEnabled(mUserTracker.getUserId())) {
+                    nextState = State.DOZE_AOD;
+                } else if (mSystemSettings.getIntForUser("screen_off_aod_enabled", 0,
+                        mUserTracker.getUserId()) == 1) {
                     nextState = State.DOZE_AOD;
                 } else {
                     nextState = State.DOZE;
