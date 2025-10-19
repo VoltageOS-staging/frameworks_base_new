@@ -38,7 +38,7 @@ import com.android.systemui.battery.unified.BatteryLayersDrawable.Companion.Metr
  *
  * Note that these drawing metrics are only tested to work with google-sans BOLD
  */
-class BatteryPercentTextOnlyDrawable(font: Typeface) : Drawable() {
+class BatteryPercentTextOnlyDrawable(initialTypeface: Typeface) : Drawable() {
     private var hScale = 1f
     private var vScale = 1f
 
@@ -50,12 +50,22 @@ class BatteryPercentTextOnlyDrawable(font: Typeface) : Drawable() {
             invalidateSelf()
         }
 
+    var typeface: Typeface = initialTypeface
+        set(value) {
+            if (field != value) {
+               field = value
+                textPaint.typeface = value
+                updateScale()
+                invalidateSelf()
+            }
+        }
+
     private var percentText = "$batteryLevel"
 
     private val textPaint =
         Paint().also { p ->
             p.textSize = 10f
-            p.typeface = font
+            p.typeface = typeface
         }
 
     override fun onBoundsChange(bounds: Rect) {

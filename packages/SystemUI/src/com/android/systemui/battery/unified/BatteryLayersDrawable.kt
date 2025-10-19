@@ -28,6 +28,7 @@ import android.util.PathParser
 import android.view.Gravity
 import android.view.View
 import com.android.systemui.res.R
+import com.android.internal.R as RInternal
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -90,6 +91,15 @@ class BatteryLayersDrawable(
             field = value
             updateColorProfile(batteryState.hasForegroundContent(), batteryState.color, value)
         }
+
+    /** Sets the [Typeface] for the percentage text. */
+    fun setTypeface(typeface: Typeface) {
+        if (textOnly.typeface != typeface) {
+            textOnly.typeface = typeface
+            spaceSharingText.typeface = typeface
+            invalidateSelf()
+        }
+    }
 
     init {
         isAutoMirrored = true
@@ -328,6 +338,9 @@ class BatteryLayersDrawable(
                     context.getString(R.string.battery_unified_frame_path_string)
                 )
 
+            val themedFontFamily = context.getString(RInternal.string.config_bodyFontFamily)
+            val themedTypeface = Typeface.create(themedFontFamily, Typeface.BOLD)
+
             val frameBg =
                 context.getDrawable(R.drawable.battery_unified_frame_bg)
                     ?: throw IllegalStateException("Missing battery_unified_frame_bg.xml")
@@ -335,8 +348,8 @@ class BatteryLayersDrawable(
                 context.getDrawable(R.drawable.battery_unified_frame)
                     ?: throw IllegalStateException("Missing battery_unified_frame.xml")
             val fill = BatteryFillDrawable(framePath)
-            val textOnly = BatteryPercentTextOnlyDrawable(PercentFont)
-            val spaceSharingText = BatterySpaceSharingPercentTextDrawable(PercentFont)
+            val textOnly = BatteryPercentTextOnlyDrawable(themedTypeface)
+            val spaceSharingText = BatterySpaceSharingPercentTextDrawable(themedTypeface)
             val attribution = BatteryAttributionDrawable(null)
 
             return BatteryLayersDrawable(

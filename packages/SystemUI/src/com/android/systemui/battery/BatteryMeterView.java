@@ -46,6 +46,7 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.graphics.Typeface;
 import android.view.LayoutInflater;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -176,6 +177,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                     getResources().getDimensionPixelSize(
                             R.dimen.status_bar_battery_unified_icon_height));
             addView(mBatteryIconView, mlp);
+            updateUnifiedBatteryFont();
         } else {
             mBatteryIconView.setImageDrawable(mDrawable);
             final MarginLayoutParams mlp = new MarginLayoutParams(
@@ -202,6 +204,14 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
 
         mUnifiedBatteryState = newState;
         mUnifiedBattery.setBatteryState(mUnifiedBatteryState);
+    }
+
+    private void updateUnifiedBatteryFont() {
+        if (mUnifiedBattery == null) return;
+
+         TextView tv = new TextView(mContext);
+         tv.setTextAppearance(mPercentageStyleId);
+         mUnifiedBattery.setTypeface(tv.getTypeface());
     }
 
     private void setupLayoutTransition() {
@@ -251,6 +261,9 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         updatePercentView();
         if (mThemedDrawable != null)
             mThemedDrawable.notifyDensityChanged();
+        if (RuntimeFlags.newStatusBarIcons()) {
+            updateUnifiedBatteryFont();
+        }
     }
 
     public void setColorsFromContext(Context context) {
