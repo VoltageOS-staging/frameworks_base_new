@@ -14156,6 +14156,20 @@ public final class Settings {
         @Readable
         public static final String HIDE_APPLIST = "hide_applist";
 
+	/**
+         * Store vboot key.
+         * @hide
+         */
+        @Readable
+        public static final String VBOOT_KEY = "vboot_key";
+
+        /**
+         * Store vboot hash.
+         * @hide
+         */
+        @Readable
+        public static final String VBOOT_HASH = "vboot_hash";
+
         /**
          * Inverse navigation bar layout
          * @hide
