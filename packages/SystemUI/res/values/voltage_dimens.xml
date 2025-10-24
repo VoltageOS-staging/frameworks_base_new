@@ -102,4 +102,7 @@
 
     <!-- AoD battery bar -->
     <dimen name="battery_bar_view_height">6dp</dimen>
+
+    <!-- Ringer QS tile -->
+    <dimen name="qs_ringer_tile_dot_radius">2dp</dimen>
 </resources>
