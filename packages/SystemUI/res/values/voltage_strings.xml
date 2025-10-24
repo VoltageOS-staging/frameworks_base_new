@@ -105,12 +105,6 @@
     <string name="accessibility_quick_settings_ambient_display_off">Ambient display off.</string>
     <string name="accessibility_quick_settings_ambient_display_on">Ambient display on.</string>
 
-    <!-- Sound QS Tile -->
-    <string name="quick_settings_sound_label">Sound</string>
-    <string name="quick_settings_sound_ring">Ring</string>
-    <string name="quick_settings_sound_vibrate">Vibrate</string>
-    <string name="quick_settings_sound_mute">Mute</string>
-
     <!-- USB tethering QS tile -->
     <string name="quick_settings_usb_tether_label">USB tethering</string>
 
@@ -243,4 +237,10 @@
 
     <!-- 4G icon -->
     <string name="show_fourg_icon_title">4G icon</string>
+
+    <string name="quick_settings_ringer_label">Ringer</string>
+    <string name="quick_settings_ringer_ring">Ring</string>
+    <string name="quick_settings_ringer_vibrate">Vibrate</string>
+    <string name="quick_settings_ringer_silent">Silent</string>
+
 </resources>
