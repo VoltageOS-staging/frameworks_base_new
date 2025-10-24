@@ -44,6 +44,10 @@ import com.android.internal.R;
 import com.android.internal.util.voltage.VoltageUtils;
 
 import java.lang.reflect.Field;
+import java.security.KeyStore;
+import java.security.KeyStoreSpi;
+import java.security.Provider;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -73,6 +77,7 @@ public final class PixelPropsUtils {
 
     private static final String PROP_HOOKS = "persist.sys.pihooks_";
     public static final String SPOOF_PIXEL_GMS = "persist.sys.pixelprops.gms";
+    public static final String SPOOF_PIXEL_INTEGRITY = "persist.sys.pixelprops.integrity";
     public static final String ENABLE_GAME_PROP_OPTIONS = "persist.sys.gameprops.enabled";
 
     private static final String TAG = PixelPropsUtils.class.getSimpleName();
@@ -257,10 +262,16 @@ public final class PixelPropsUtils {
     }
 
     public static void spoofBuildGms() {
-        if (!SystemProperties.getBoolean(SPOOF_PIXEL_GMS, true))
+        if (!SystemProperties.getBoolean(SPOOF_PIXEL_GMS, true)) {
             return;
+        }
+
         for (String key : GMS_SPOOF_KEYS) {
             setPropValue(key, SystemProperties.get(PROP_HOOKS + key));
+        }
+
+        if (SystemProperties.getBoolean(SPOOF_PIXEL_INTEGRITY, false)) {
+            spoofProvider();
         }
     }
 
@@ -357,6 +368,29 @@ public final class PixelPropsUtils {
                 setPropValue("MODEL", sDeviceModel);
                 return;
             }
+        }
+    }
+
+    private static void spoofProvider() {
+        try {
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            Field keyStoreSpiField = keyStore.getClass().getDeclaredField("keyStoreSpi");
+            keyStoreSpiField.setAccessible(true);
+            CustomKeyStoreSpi.keyStoreSpi = (KeyStoreSpi) keyStoreSpiField.get(keyStore);
+            keyStoreSpiField.setAccessible(false);
+            dlog("Successfully hooked AndroidKeyStore.");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to hook AndroidKeyStore!", e);
+        }
+
+        Provider provider = Security.getProvider("AndroidKeyStore");
+        if (provider != null) {
+            Provider customProvider = new CustomProvider(provider);
+            Security.removeProvider("AndroidKeyStore");
+            Security.insertProviderAt(customProvider, 1);
+            dlog("Successfully replaced AndroidKeyStore provider.");
+        } else {
+            Log.e(TAG, "AndroidKeyStore provider not found!");
         }
     }
 
