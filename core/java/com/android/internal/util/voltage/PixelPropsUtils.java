@@ -271,7 +271,9 @@ public final class PixelPropsUtils {
         }
 
         if (SystemProperties.getBoolean(SPOOF_PIXEL_INTEGRITY, false)) {
-            spoofProvider();
+            if (!KeyProviderManager.isKeyboxAvailable()) {
+                spoofProvider();
+            }
         }
     }
 
