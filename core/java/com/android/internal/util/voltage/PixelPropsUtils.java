@@ -76,6 +76,7 @@ public final class PixelPropsUtils {
 
     private static final String PROP_HOOKS = "persist.sys.pihooks_";
     public static final String SPOOF_PIXEL_GMS = "persist.sys.pixelprops.gms";
+    private static final String SPOOF_GMS_CERT_CHAIN = "persist.sys.pixelprops.gmscertchain";
     public static final String SPOOF_PIXEL_INTEGRITY = "persist.sys.pixelprops.integrity";
     public static final String ENABLE_GAME_PROP_OPTIONS = "persist.sys.gameprops.enabled";
 
@@ -275,6 +276,7 @@ public final class PixelPropsUtils {
             }
         }
     }
+
 
     public static void setProps(Context context) {
         final String packageName = context.getPackageName();
@@ -655,4 +657,32 @@ public final class PixelPropsUtils {
     public static void dlog(String msg) {
         if (DEBUG) Log.d(TAG, "[" + sProcessName + "] " + msg);
     }
+
+    private static boolean isCallerSafetyNet() {
+        for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+            final String cn = e.getClassName();
+            if (cn != null && (cn.contains("DroidGuard") || cn.contains("droidguard"))) return true;
+        }
+        return false;
+
+    public static void onEngineGetCertificateChain() {
+        boolean isPixelGmsEnabled = SystemProperties.getBoolean(SPOOF_GMS, true);
+        if (!isPixelGmsEnabled) {
+            dlog("onEngineGetCertificateChain disabled by setting");
+            return;
+        }
+
+        if (SystemProperties.getBoolean(SPOOF_GMS_CERT_CHAIN, false)
+                && KeyProviderManager.isKeyboxAvailable()) {
+            dlog("Key attestation blocking is disabled because a keybox is defined to spoof");
+            return;
+        }
+
+        // Check stack for SafetyNet or Play Integrity
+        if (isCallerSafetyNet()) {
+            Log.i(TAG, "Blocked key attestation");
+            throw new UnsupportedOperationException();
+        }
+    }
+
 }
