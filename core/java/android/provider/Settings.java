@@ -6830,12 +6830,6 @@ public final class Settings {
          public static final String LOCKSCREEN_ROTATION = "lockscreen_rotation";
 
         /**
-         * Stores the array name of the values currently used for SpoofBuildGms
-         * @hide
-         */
-        public static final String PPU_SPOOF_BUILD_GMS_ARRAY = "ppu_spoof_build_gms_array";
-
-        /**
          * Whether the phone vibrates on call connect
          * @hide
          */
@@ -13983,13 +13977,6 @@ public final class Settings {
          */
         public static final String HBM_SETTING_KEY =
                 "com.android.server.display.HBM_SETTING_KEY";
-
-        /**
-         * User selectable keybox data.
-         * @hide
-         */
-        @Readable
-        public static final String KEYBOX_DATA = "keybox_data";
 
 	/**
          * Custom time when user is scheduled to deactivate
