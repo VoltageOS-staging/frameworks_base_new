@@ -664,6 +664,7 @@ public final class PixelPropsUtils {
             if (cn != null && (cn.contains("DroidGuard") || cn.contains("droidguard"))) return true;
         }
         return false;
+    }
 
     public static void onEngineGetCertificateChain() {
         boolean isKeyBoxAvailable = KeyProviderManager.isKeyboxAvailable();
@@ -686,5 +687,3 @@ public final class PixelPropsUtils {
             throw new UnsupportedOperationException();
         }
     }
-
-}
