@@ -669,7 +669,7 @@ public final class PixelPropsUtils {
     public static void onEngineGetCertificateChain() {
         boolean isKeyBoxAvailable = KeyProviderManager.isKeyboxAvailable();
 
-        boolean isPixelGmsEnabled = SystemProperties.getBoolean(SPOOF_GMS, true);
+        boolean isPixelGmsEnabled = SystemProperties.getBoolean(SPOOF_PIXEL_GMS, true);
         if (!isKeyBoxAvailable && !isPixelGmsEnabled) {
             dlog("onEngineGetCertificateChain disabled by setting");
             return;
@@ -687,3 +687,4 @@ public final class PixelPropsUtils {
             throw new UnsupportedOperationException();
         }
     }
+}
