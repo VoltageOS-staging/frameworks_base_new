@@ -38,6 +38,7 @@ import com.android.systemui.common.slider.LevelSliderDimens
 import com.android.systemui.common.slider.VolumeInteractor
 import com.android.systemui.common.slider.TorchLevelInteractor
 import com.android.systemui.common.slider.CaffeineInteractor
+import com.android.systemui.common.slider.NotificationSuppressInteractor
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileHeight
 import com.android.systemui.statusbar.policy.FlashlightStrengthController
@@ -128,6 +129,10 @@ class AxTileProvider @Inject constructor(
                 CaffeineSlider(border)
                 true
             }
+            "notif_suppress" -> {
+                NotificationSuppressSlider(border)
+                true
+            }
             else -> false
         }
     }
@@ -182,6 +187,17 @@ class AxTileProvider @Inject constructor(
         val interactor = remember {
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             CaffeineInteractor(context, powerManager)
+        }
+        
+        LevelSliderTile(interactor = interactor, border = border)
+    }
+
+    @Composable
+    private fun NotificationSuppressSlider(border: Modifier = Modifier) {
+        val context = LocalContext.current
+        
+        val interactor = remember {
+            NotificationSuppressInteractor(context, context.contentResolver)
         }
         
         LevelSliderTile(interactor = interactor, border = border)
