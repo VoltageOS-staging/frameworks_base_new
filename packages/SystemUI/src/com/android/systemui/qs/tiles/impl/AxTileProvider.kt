@@ -17,6 +17,7 @@ package com.android.systemui.qs.tiles.impl
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.PowerManager
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import com.android.systemui.common.slider.LevelSliderTheme
 import com.android.systemui.common.slider.LevelSliderDimens
 import com.android.systemui.common.slider.VolumeInteractor
 import com.android.systemui.common.slider.TorchLevelInteractor
+import com.android.systemui.common.slider.CaffeineInteractor
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileHeight
 import com.android.systemui.statusbar.policy.FlashlightStrengthController
@@ -122,6 +124,10 @@ class AxTileProvider @Inject constructor(
                     false
                 }
             }
+            "caffeine" -> {
+                CaffeineSlider(border)
+                true
+            }
             else -> false
         }
     }
@@ -164,6 +170,18 @@ class AxTileProvider @Inject constructor(
     private fun TorchSlider(border: Modifier = Modifier) {
         val interactor = remember {
             TorchLevelInteractor(flashlightController)
+        }
+        
+        LevelSliderTile(interactor = interactor, border = border)
+    }
+
+    @Composable
+    private fun CaffeineSlider(border: Modifier = Modifier) {
+        val context = LocalContext.current
+        
+        val interactor = remember {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            CaffeineInteractor(context, powerManager)
         }
         
         LevelSliderTile(interactor = interactor, border = border)
