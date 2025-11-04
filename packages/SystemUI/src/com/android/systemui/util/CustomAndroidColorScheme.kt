@@ -52,10 +52,7 @@ class CustomAndroidColorScheme(private val context: Context) {
 
     @get:Composable
     val primarySurface: Color
-        get() = if (isNightMode) 
-            colorResource(android.R.color.system_accent1_200)
-        else 
-            colorResource(android.R.color.system_accent1_700)
+        get() = primary.copy(alpha = 0.8f)
 
     @get:Composable
     val secondary: Color
