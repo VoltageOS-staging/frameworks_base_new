@@ -93,7 +93,9 @@ class AxTileLevelDimens(
 
 @SysUISingleton
 class AxTileProvider @Inject constructor(
-    private val flashlightController: FlashlightStrengthController
+    private val flashlightController: FlashlightStrengthController,
+    private val caffeineInteractor: CaffeineInteractor,
+    private val notificationSuppressInteractor: NotificationSuppressInteractor,
 ) {
 
     companion object {
@@ -126,11 +128,11 @@ class AxTileProvider @Inject constructor(
                 }
             }
             "caffeine" -> {
-                CaffeineSlider(border)
+                LevelSliderTile(interactor = caffeineInteractor, border = border)
                 true
             }
             "notif_suppress" -> {
-                NotificationSuppressSlider(border)
+                LevelSliderTile(interactor = notificationSuppressInteractor, border = border)
                 true
             }
             else -> false
@@ -175,29 +177,6 @@ class AxTileProvider @Inject constructor(
     private fun TorchSlider(border: Modifier = Modifier) {
         val interactor = remember {
             TorchLevelInteractor(flashlightController)
-        }
-        
-        LevelSliderTile(interactor = interactor, border = border)
-    }
-
-    @Composable
-    private fun CaffeineSlider(border: Modifier = Modifier) {
-        val context = LocalContext.current
-        
-        val interactor = remember {
-            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            CaffeineInteractor(context, powerManager)
-        }
-        
-        LevelSliderTile(interactor = interactor, border = border)
-    }
-
-    @Composable
-    private fun NotificationSuppressSlider(border: Modifier = Modifier) {
-        val context = LocalContext.current
-        
-        val interactor = remember {
-            NotificationSuppressInteractor(context, context.contentResolver)
         }
         
         LevelSliderTile(interactor = interactor, border = border)

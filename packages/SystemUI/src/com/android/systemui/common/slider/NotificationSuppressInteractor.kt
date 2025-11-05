@@ -28,14 +28,19 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.android.systemui.dagger.SysUISingleton
+import com.android.systemui.res.R
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlin.math.roundToInt
+import javax.inject.Inject
 
-class NotificationSuppressInteractor(
+@SysUISingleton
+class NotificationSuppressInteractor @Inject constructor(
     private val context: Context,
-    private val resolver: ContentResolver
 ) : LevelSliderInteractor {
+
+    private val resolver: ContentResolver = context.contentResolver
 
     companion object {
        private const val SETTING_KEY = Settings.System.NOTIFICATION_SOUND_VIB_SCREEN_ON
@@ -51,6 +56,8 @@ class NotificationSuppressInteractor(
     private val _labelFlow = MutableStateFlow(getInitialLabel())
     private var countdownTimer: CountDownTimer? = null
     private var currentDurationIndex = 0
+
+    val label: StateFlow<String> = _labelFlow.asStateFlow()
 
     init {
         checkExistingTimer()
@@ -103,6 +110,19 @@ class NotificationSuppressInteractor(
         _stateFlow.value = level
     }
 
+    fun cycleTimeout() {
+        val newIndex = if (currentDurationIndex == 0) {
+            1
+        } else {
+            (currentDurationIndex + 1) % DURATIONS_MINUTES.size
+        }
+        setLevel(newIndex / (DURATIONS_MINUTES.size - 1).toFloat())
+    }
+
+    fun setInfinite() {
+        setLevel(1.0f)
+    }
+
     private fun startSuppression(minutes: Int) {
         stopCountdown()
 
@@ -110,7 +130,7 @@ class NotificationSuppressInteractor(
 
         if (minutes == -1) {
             prefs.edit().putLong(KEY_END_TIME, -1).apply()
-            _labelFlow.value = "Silent • ∞"
+            _labelFlow.value = formatCountdown(-1)
             return
         }
 
@@ -138,7 +158,7 @@ class NotificationSuppressInteractor(
         prefs.edit().remove(KEY_END_TIME).apply()
         currentDurationIndex = 0
         _stateFlow.value = 0f
-        _labelFlow.value = "Silent notifs"
+        _labelFlow.value = getInitialLabel()
     }
 
     private fun stopCountdown() {
@@ -150,7 +170,7 @@ class NotificationSuppressInteractor(
         val endTime = prefs.getLong(KEY_END_TIME, 0)
         if (endTime == -1L) {
             currentDurationIndex = INFINITE_INDEX
-            _labelFlow.value = "Silent • ∞"
+            _labelFlow.value = formatCountdown(-1)
         } else if (endTime > System.currentTimeMillis()) {
             val remainingMs = endTime - System.currentTimeMillis()
             val minutes = (remainingMs / 60000).toInt()
@@ -159,14 +179,15 @@ class NotificationSuppressInteractor(
     }
 
    private fun formatCountdown(seconds: Int): String {
+        val labelPrefix = context.getString(R.string.quick_settings_notif_suppress_label)
+        if (seconds == -1) return "$labelPrefix • ∞"
         val mins = seconds / 60
         val secs = seconds % 60
-        return String.format("Silent • %02d:%02d", mins, secs)
+        return String.format("$labelPrefix • %02d:%02d", mins, secs)
     }
 
     private fun getInitialLabel(): String {
-        val isEnabled = Settings.System.getInt(resolver, SETTING_KEY, 1) == 0
-        return if (isEnabled) "Silent • Active" else "Silent notifs"
+        return context.getString(R.string.quick_settings_notif_suppress_label)
     }
 
     @Composable

@@ -18,12 +18,11 @@ package com.android.systemui.qs.tiles
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import android.service.quicksettings.Tile
 import com.android.internal.logging.MetricsLogger
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent
-import com.android.systemui.common.slider.NotificationSuppressInteractor
 import com.android.systemui.animation.Expandable
+import com.android.systemui.common.slider.CaffeineInteractor
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.plugins.ActivityStarter
@@ -40,10 +39,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-
 import javax.inject.Inject
 
-class NotificationSuppressTile @Inject constructor(
+class CaffeineTile @Inject constructor(
     host: QSHost,
     uiEventLogger: QsEventLogger,
     @Background private val backgroundLooper: Looper,
@@ -52,61 +50,59 @@ class NotificationSuppressTile @Inject constructor(
     metricsLogger: MetricsLogger,
     statusBarStateController: StatusBarStateController,
     activityStarter: ActivityStarter,
-    private val interactor: NotificationSuppressInteractor,
-    qsLogger: QSLogger
+    qsLogger: QSLogger,
+    private val caffeineInteractor: CaffeineInteractor
 ) : QSTileImpl<BooleanState>(
     host, uiEventLogger, backgroundLooper, mainHandler, falsingManager, metricsLogger,
     statusBarStateController, activityStarter, qsLogger
 ) {
 
     companion object {
-        const val TILE_SPEC = "notif_suppress"
+        const val TILE_SPEC = "caffeine"
     }
-
-    private val icon = ResourceIcon.get(R.drawable.ic_qs_notification_suppress)
 
     private val tileScope = CoroutineScope(Dispatchers.Main.immediate)
     private var listeningJob: Job? = null
+    private val icon = ResourceIcon.get(R.drawable.ic_qs_caffeine)
 
-    override fun newTileState(): BooleanState {
-        return BooleanState().apply {
-            handlesLongClick = true
-        }
+    override fun newTileState(): BooleanState = BooleanState().apply {
+        handlesLongClick = true
     }
 
     override fun handleClick(expandable: Expandable?) {
-        interactor.cycleTimeout()
+        caffeineInteractor.cycleTimeout()
     }
-
+    
     override fun handleLongClick(expandable: Expandable?) {
-        interactor.setInfinite()
+        caffeineInteractor.setInfinite()
     }
 
     override fun handleUpdateState(state: BooleanState, arg: Any?) {
-        val currentLevel = interactor.getCurrentLevel()
-        val isSuppressed = currentLevel > 0f
+        val currentLevel = caffeineInteractor.getCurrentLevel()
+        val isActive = currentLevel > 0f
 
-        state.value = isSuppressed
-        state.label = mContext.getString(R.string.quick_settings_notif_suppress_label)
+        state.value = isActive
+        state.label = mContext.getString(R.string.quick_settings_caffeine_label)
         state.icon = icon
-
-        if (isSuppressed) {
-            state.state = Tile.STATE_ACTIVE
-            state.secondaryLabel = interactor.label.value.substringAfter("•").trim()
+        state.state = if (isActive) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        
+        if (isActive) {
+            state.secondaryLabel = caffeineInteractor.label.value.substringAfter("•").trim()
+            state.contentDescription = mContext.getString(R.string.accessibility_quick_settings_caffeine_on)
             state.dualTarget = true
         } else {
-            state.state = Tile.STATE_INACTIVE
             state.secondaryLabel = null
+            state.contentDescription = mContext.getString(R.string.accessibility_quick_settings_caffeine_off)
             state.dualTarget = false
         }
     }
-
+    
     override fun handleSetListening(listening: Boolean) {
         super.handleSetListening(listening)
         if (listening) {
             listeningJob = tileScope.launch {
-                interactor.label.collect {
-                   refreshState()
+                caffeineInteractor.label.collect {
+                    refreshState()
                 }
             }
         } else {
@@ -114,13 +110,9 @@ class NotificationSuppressTile @Inject constructor(
         }
     }
 
-    override fun getLongClickIntent(): Intent {
-        return Intent(Settings.ACTION_SOUND_SETTINGS)
-    }
+    override fun getLongClickIntent(): Intent? = null
 
-    override fun getTileLabel(): CharSequence {
-        return mContext.getString(R.string.quick_settings_notif_suppress_label)
-    }
+    override fun getTileLabel(): CharSequence = mContext.getString(R.string.quick_settings_caffeine_label)
 
     override fun getMetricsCategory(): Int = MetricsEvent.QS_PANEL
 

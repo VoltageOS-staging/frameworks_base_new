@@ -23,18 +23,22 @@ import android.os.CountDownTimer
 import android.os.PowerManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalCafe
-import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.android.systemui.dagger.SysUISingleton
+import com.android.systemui.res.R
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlin.math.roundToInt
+import javax.inject.Inject
 
-class CaffeineInteractor(
+@SysUISingleton
+class CaffeineInteractor @Inject constructor(
     private val context: Context,
-    private val powerManager: PowerManager
 ) : LevelSliderInteractor {
+
+    private val powerManager: PowerManager = context.getSystemService(PowerManager::class.java)
 
     companion object {
         private val DURATIONS_MINUTES = listOf(0, 5, 15, 30, 60, 120, -1)
@@ -42,15 +46,16 @@ class CaffeineInteractor(
     }
 
     private val wakeLock = powerManager.newWakeLock(
-        PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ON_AFTER_RELEASE,
+        PowerManager.SCREEN_BRIGHT_WAKE_LOCK,
         "CaffeineInteractor"
     )
 
     private val _stateFlow = MutableStateFlow(getCurrentLevel())
-    private val _remainingSeconds = MutableStateFlow(0)
-    private val _labelFlow = MutableStateFlow("Caffeine")
+    private val _labelFlow = MutableStateFlow(context.getString(R.string.quick_settings_caffeine_label))
     private var countdownTimer: CountDownTimer? = null
     private var currentDurationIndex = 0
+
+    val label: StateFlow<String> = _labelFlow.asStateFlow()
 
     override val level: Flow<Float> = callbackFlow {
         trySend(_stateFlow.value)
@@ -59,7 +64,6 @@ class CaffeineInteractor(
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == Intent.ACTION_SCREEN_OFF) {
                     stopCaffeine()
-                    trySend(0f)
                 }
             }
         }
@@ -67,7 +71,7 @@ class CaffeineInteractor(
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
         context.registerReceiver(receiver, filter)
 
-        val job = _stateFlow.collect { trySend(it) }
+        _stateFlow.collect { trySend(it) }
 
         awaitClose {
             context.unregisterReceiver(receiver)
@@ -98,6 +102,19 @@ class CaffeineInteractor(
         _stateFlow.value = level
     }
 
+    fun cycleTimeout() {
+        val newIndex = if (currentDurationIndex == 0) {
+            1
+       } else {
+            (currentDurationIndex + 1) % DURATIONS_MINUTES.size
+        }
+        setLevel(newIndex / (DURATIONS_MINUTES.size - 1).toFloat())
+    }
+
+    fun setInfinite() {
+        setLevel(1.0f) // Max level corresponds to infinite
+    }
+
     private fun startCaffeine(minutes: Int) {
         stopCountdown()
 
@@ -106,18 +123,15 @@ class CaffeineInteractor(
         }
 
         if (minutes == -1) {
-            _remainingSeconds.value = -1
-            _labelFlow.value = "Caffeine • ∞"
+            _labelFlow.value = formatCountdown(-1)
             return
         }
 
         val durationMillis = minutes * 60 * 1000L
-        _remainingSeconds.value = minutes * 60
         
         countdownTimer = object : CountDownTimer(durationMillis, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 val seconds = (millisUntilFinished / 1000).toInt()
-                _remainingSeconds.value = seconds
                 _labelFlow.value = formatCountdown(seconds)
             }
 
@@ -136,39 +150,35 @@ class CaffeineInteractor(
         }
         currentDurationIndex = 0
         _stateFlow.value = 0f
-        _labelFlow.value = "Caffeine"
+        _labelFlow.value = context.getString(R.string.quick_settings_caffeine_label)
     }
 
     private fun stopCountdown() {
         countdownTimer?.cancel()
         countdownTimer = null
-        _remainingSeconds.value = 0
     }
 
     private fun formatCountdown(seconds: Int): String {
-        if (seconds == -1) return "Caffeine • ∞"
+        val labelPrefix = context.getString(R.string.quick_settings_caffeine_label)
+        if (seconds == -1) return "$labelPrefix • ∞"
         val hours = seconds / 3600
         val mins = (seconds % 3600) / 60
         val secs = seconds % 60
         
         return if (hours > 0) {
-            String.format("Caffeine • %d:%02d:%02d", hours, mins, secs)
+            String.format("$labelPrefix • %d:%02d:%02d", hours, mins, secs)
         } else {
-            String.format("Caffeine • %02d:%02d", mins, secs)
+            String.format("$labelPrefix • %02d:%02d", mins, secs)
         }
     }
 
     @Composable
     override fun getIcon(level: Float): ImageVector {
-        return if (level > 0f) Icons.Filled.LocalCafe else Icons.Filled.Coffee
+        return Icons.Filled.LocalCafe
     }
 
     @Composable
     override fun getLabel(level: Float): String {
         return _labelFlow.collectAsState().value
-    }
-
-    fun cleanup() {
-        stopCaffeine()
     }
 }
