@@ -66,11 +66,12 @@ fun LevelSliderWidget(
 
     val density = LocalDensity.current
 
-    val activeContentColor = if (isDozing) Color.White else CustomAndroidColorScheme.onPrimary
-    val progressFillColor = if (isDozing || !isEnabled) Color.Transparent else CustomAndroidColorScheme.primary
-    val trackBgColor = if (isDozing) Color.Transparent else CustomAndroidColorScheme.primarySurface
-    val disabledContentColor = if (isDozing) Color.Transparent else CustomAndroidColorScheme.onSurface 
-    val disabledBgColor = if (isDozing) Color.Transparent else CustomAndroidColorScheme.secondary
+    val colors = CustomAndroidColorScheme.current // Get the current instance
+    val activeContentColor = if (isDozing) Color.White else colors.onPrimary
+    val progressFillColor = if (isDozing || !isEnabled) Color.Transparent else colors.primary
+    val trackBgColor = if (isDozing) Color.Transparent else colors.primarySurface
+    val disabledContentColor = if (isDozing) Color.Transparent else colors.onSurface
+    val disabledBgColor = if (isDozing) Color.Transparent else colors.secondary
 
     val animatedTrackColor by animateColorAsState(
         targetValue = if (level == 0f || !isEnabled) disabledBgColor else trackBgColor,
@@ -101,7 +102,7 @@ fun LevelSliderWidget(
             .clip(CircleShape)
             .then(if (isDozing) Modifier.border(theme.dozeStroke, Color.White, CircleShape) else border)
             .then(
-                if (isEnabled) Modifier.border(2.dp, CustomAndroidColorScheme.primary.copy(alpha = 0.6f), CircleShape)
+                if (isEnabled) Modifier.border(2.dp, colors.primary.copy(alpha = 0.6f), CircleShape)
                 else Modifier
             )
             .pointerInput(Unit) {

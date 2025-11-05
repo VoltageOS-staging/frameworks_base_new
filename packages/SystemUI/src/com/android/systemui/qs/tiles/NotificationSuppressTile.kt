@@ -38,9 +38,7 @@ import com.android.systemui.res.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-
 import javax.inject.Inject
 
 class NotificationSuppressTile @Inject constructor(
@@ -63,23 +61,25 @@ class NotificationSuppressTile @Inject constructor(
         const val TILE_SPEC = "notif_suppress"
     }
 
-    private val icon = ResourceIcon.get(R.drawable.ic_qs_notification_suppress)
+    private val iconActive = ResourceIcon.get(R.drawable.ic_qs_notification_suppress)
+    private val iconInactive = ResourceIcon.get(R.drawable.ic_qs_notifications)
 
     private val tileScope = CoroutineScope(Dispatchers.Main.immediate)
     private var listeningJob: Job? = null
 
     override fun newTileState(): BooleanState {
         return BooleanState().apply {
-            handlesLongClick = true
+            handlesLongClick = false
         }
     }
 
     override fun handleClick(expandable: Expandable?) {
-        interactor.cycleTimeout()
-    }
-
-    override fun handleLongClick(expandable: Expandable?) {
-        interactor.setInfinite()
+        val currentLevel = interactor.getCurrentLevel()
+        if (currentLevel > 0f) {
+            interactor.setLevel(0f)
+        } else {
+            interactor.setInfinite()
+        }
     }
 
     override fun handleUpdateState(state: BooleanState, arg: Any?) {
@@ -88,16 +88,15 @@ class NotificationSuppressTile @Inject constructor(
 
         state.value = isSuppressed
         state.label = mContext.getString(R.string.quick_settings_notif_suppress_label)
-        state.icon = icon
+        
+        state.icon = if (isSuppressed) iconActive else iconInactive
+        state.state = if (isSuppressed) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
 
         if (isSuppressed) {
-            state.state = Tile.STATE_ACTIVE
-            state.secondaryLabel = interactor.label.value.substringAfter("•").trim()
-            state.dualTarget = true
+            val labelValue = interactor.label.value
+            state.secondaryLabel = labelValue.substringAfter("•", "∞").trim()
         } else {
-            state.state = Tile.STATE_INACTIVE
             state.secondaryLabel = null
-            state.dualTarget = false
         }
     }
 

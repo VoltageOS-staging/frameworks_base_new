@@ -37,7 +37,6 @@ import com.android.systemui.res.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -63,18 +62,21 @@ class CaffeineTile @Inject constructor(
 
     private val tileScope = CoroutineScope(Dispatchers.Main.immediate)
     private var listeningJob: Job? = null
-    private val icon = ResourceIcon.get(R.drawable.ic_qs_caffeine)
+    
+    private val iconActive = ResourceIcon.get(R.drawable.ic_qs_caffeine)
+    private val iconInactive = ResourceIcon.get(R.drawable.ic_qs_caffeine_off)
 
     override fun newTileState(): BooleanState = BooleanState().apply {
-        handlesLongClick = true
+        handlesLongClick = false
     }
 
     override fun handleClick(expandable: Expandable?) {
-        caffeineInteractor.cycleTimeout()
-    }
-    
-    override fun handleLongClick(expandable: Expandable?) {
-        caffeineInteractor.setInfinite()
+        val currentLevel = caffeineInteractor.getCurrentLevel()
+        if (currentLevel > 0f) {
+            caffeineInteractor.setLevel(0f)
+        } else {
+            caffeineInteractor.setInfinite()
+        }
     }
 
     override fun handleUpdateState(state: BooleanState, arg: Any?) {
@@ -83,17 +85,21 @@ class CaffeineTile @Inject constructor(
 
         state.value = isActive
         state.label = mContext.getString(R.string.quick_settings_caffeine_label)
-        state.icon = icon
+        
+        state.icon = if (isActive) iconActive else iconInactive
         state.state = if (isActive) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         
         if (isActive) {
-            state.secondaryLabel = caffeineInteractor.label.value.substringAfter("•").trim()
-            state.contentDescription = mContext.getString(R.string.accessibility_quick_settings_caffeine_on)
-            state.dualTarget = true
+            val labelValue = caffeineInteractor.label.value
+            state.secondaryLabel = labelValue.substringAfter("•", "∞").trim()
+            state.contentDescription = mContext.getString(
+                R.string.accessibility_quick_settings_caffeine_on
+            )
         } else {
             state.secondaryLabel = null
-            state.contentDescription = mContext.getString(R.string.accessibility_quick_settings_caffeine_off)
-            state.dualTarget = false
+            state.contentDescription = mContext.getString(
+                R.string.accessibility_quick_settings_caffeine_off
+            )
         }
     }
     
@@ -112,7 +118,8 @@ class CaffeineTile @Inject constructor(
 
     override fun getLongClickIntent(): Intent? = null
 
-    override fun getTileLabel(): CharSequence = mContext.getString(R.string.quick_settings_caffeine_label)
+    override fun getTileLabel(): CharSequence = 
+        mContext.getString(R.string.quick_settings_caffeine_label)
 
     override fun getMetricsCategory(): Int = MetricsEvent.QS_PANEL
 
