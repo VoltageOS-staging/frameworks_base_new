@@ -130,7 +130,7 @@ class NotificationSuppressInteractor @Inject constructor(
 
         if (minutes == -1) {
             prefs.edit().putLong(KEY_END_TIME, -1).apply()
-            _labelFlow.value = formatCountdown(-1)
+            _labelFlow.value = "Silent • ∞"
             return
         }
 
@@ -170,7 +170,7 @@ class NotificationSuppressInteractor @Inject constructor(
         val endTime = prefs.getLong(KEY_END_TIME, 0)
         if (endTime == -1L) {
             currentDurationIndex = INFINITE_INDEX
-            _labelFlow.value = formatCountdown(-1)
+            _labelFlow.value = "Silent • ∞"
         } else if (endTime > System.currentTimeMillis()) {
             val remainingMs = endTime - System.currentTimeMillis()
             val minutes = (remainingMs / 60000).toInt()
@@ -179,15 +179,14 @@ class NotificationSuppressInteractor @Inject constructor(
     }
 
    private fun formatCountdown(seconds: Int): String {
-        val labelPrefix = context.getString(R.string.quick_settings_notif_suppress_label)
-        if (seconds == -1) return "$labelPrefix • ∞"
+        if (seconds == -1) return "Silent • ∞"
         val mins = seconds / 60
         val secs = seconds % 60
-        return String.format("$labelPrefix • %02d:%02d", mins, secs)
+        return String.format("Silent • %02d:%02d", mins, secs)
     }
 
     private fun getInitialLabel(): String {
-        return context.getString(R.string.quick_settings_notif_suppress_label)
+        return "Silent notifs"
     }
 
     @Composable
