@@ -61,7 +61,8 @@ class NotificationSuppressTile @Inject constructor(
         const val TILE_SPEC = "notif_suppress"
     }
 
-    private val icon = ResourceIcon.get(R.drawable.ic_qs_notification_suppress)
+    private val iconActive = ResourceIcon.get(R.drawable.ic_qs_notification_suppress)
+    private val iconInactive = ResourceIcon.get(R.drawable.ic_qs_notifications)
 
     private val tileScope = CoroutineScope(Dispatchers.Main.immediate)
     private var listeningJob: Job? = null
