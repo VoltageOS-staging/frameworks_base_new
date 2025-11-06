@@ -83,7 +83,9 @@ class TorchLevelInteractor(
         if (!ctrl.supported) return
         val percent = (level * 100).roundToInt()
         torchLevel = ctrl.toTorchLevel(percent)
-        lastPercent = percent
+        if (percent > 0) {
+            lastPercent = percent
+        }
     }
 
     override fun onTap(enabled: Boolean) {
