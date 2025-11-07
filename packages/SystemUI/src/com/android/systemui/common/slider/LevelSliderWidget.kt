@@ -35,9 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.compose.theme.colorAttr
-import com.android.systemui.shade.ui.boost
-import com.android.systemui.shade.ui.isVibrantShadeEnabled
 import com.android.systemui.util.CustomAndroidColorScheme
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -69,30 +66,40 @@ fun LevelSliderWidget(
 
     val density = LocalDensity.current
 
+    // --- Color Definitions ---
     val colors = CustomAndroidColorScheme.current
+    val activeTrackColor = if (isDozing) Color.Transparent else colors.primary
     val activeContentColor = if (isDozing) Color.White else colors.onPrimary
-    val progressFillColor = if (isDozing) Color.Transparent else colors.onPrimary.copy(alpha = 0.2f)
-    val useVibrantColors = isVibrantShadeEnabled()
-    val trackBgColor = if (isDozing) Color.Transparent else if (useVibrantColors) {
-        colorAttr(com.android.internal.R.attr.colorAccent).boost()
-    } else {
-        colors.primary
-    }
-    val disabledContentColor = if (isDozing) Color.Transparent else colors.onSurface
-    val disabledBgColor = if (isDozing) Color.Transparent else colors.secondary
+    val inactiveTrackColor = if (isDozing) Color.Transparent else colors.secondary
+    val inactiveContentColor = if (isDozing) Color.Transparent else colors.onSurface
+    
+    // --- THE CORE FIX IS HERE ---
+    // Define the two states for the progress bar's fill color
+    val activeProgressFillColor = if (isDozing) Color.Transparent else colors.onPrimary.copy(alpha = 0.3f)
+    val inactiveProgressFillColor = Color.Transparent
 
+    // Animate the tile's main background color
     val animatedTrackColor by animateColorAsState(
-        targetValue = if (level == 0f) disabledBgColor else trackBgColor,
+        targetValue = if (isEnabled) activeTrackColor else inactiveTrackColor,
         animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
         label = "track_color_animation"
     )
 
+    // Animate the icon and text color
     val animatedContentColor by animateColorAsState(
-        targetValue = if (level == 0f) disabledContentColor else activeContentColor,
+        targetValue = if (isEnabled) activeContentColor else inactiveContentColor,
         animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
         label = "content_color_animation"
     )
 
+    // Animate the progress bar's color
+    val animatedProgressFillColor by animateColorAsState(
+        targetValue = if (isEnabled) activeProgressFillColor else inactiveProgressFillColor,
+        animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
+        label = "progress_fill_color_animation"
+    )
+
+    // Optional: Scale effect on enable
     val enabledScale by animateFloatAsState(
         targetValue = if (isEnabled) 1.05f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
@@ -109,12 +116,8 @@ fun LevelSliderWidget(
             .scale(enabledScale)
             .clip(CircleShape)
             .then(if (isDozing) Modifier.border(theme.dozeStroke, Color.White, CircleShape) else border)
-            .then(
-                if (isEnabled) Modifier.border(2.dp, colors.primary.copy(alpha = 0.6f), CircleShape)
-                else Modifier
-            )
             .pointerInput(Unit) {
-                detectTapGestures { tapOffset ->
+                detectTapGestures {
                     isEnabled = !isEnabled
                     (interactor as? TapHandlingInteractor)?.onTap(isEnabled)
                 }
@@ -123,9 +126,7 @@ fun LevelSliderWidget(
                 if (isEnabled) {
                     detectHorizontalDragGestures(
                         onDragStart = { isDragging = true },
-                        onDragEnd = {
-                            isDragging = false
-                        },
+                        onDragEnd = { isDragging = false },
                         onDragCancel = { isDragging = false }
                     ) { change, dragAmount ->
                         change.consume()
@@ -139,11 +140,13 @@ fun LevelSliderWidget(
         val boxWidthPx = with(density) { maxWidth.toPx() }
         val fillWidth = boxWidthPx * animatedLevel
 
+        // Background of the entire track
         Box(Modifier.fillMaxSize().background(animatedTrackColor, CircleShape).clip(CircleShape))
 
+        // The progress indicator bar, now using the animated color
         Canvas(Modifier.fillMaxSize().clip(CircleShape)) {
             drawRoundRect(
-                color = progressFillColor,
+                color = animatedProgressFillColor,
                 size = Size(fillWidth, size.height),
                 cornerRadius = CornerRadius(size.height / 2)
             )
