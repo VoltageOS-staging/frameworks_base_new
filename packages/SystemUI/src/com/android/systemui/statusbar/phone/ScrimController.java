@@ -1310,14 +1310,17 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         }
 
         // Prevent notification scrim flicker when transitioning away from keyguard.
-        if (mKeyguardStateController.isKeyguardGoingAway()) {
+        // Don't apply when occluded to avoid interfering with call screen
+        if (mKeyguardStateController.isKeyguardGoingAway() && !mKeyguardOccluded) {
             mNotificationsAlpha = 0;
             mBehindAlpha = 0;
         }
 
         // Prevent flickering for activities above keyguard and quick settings in keyguard.
+        // Only apply in KEYGUARD/SHADE_LOCKED states, not during unlock transitions
         if (mKeyguardOccluded
-                && (mState == ScrimState.KEYGUARD || mState == ScrimState.SHADE_LOCKED)) {
+                && (mState == ScrimState.KEYGUARD || mState == ScrimState.SHADE_LOCKED)
+                && !mKeyguardStateController.isKeyguardGoingAway()) {
             mBehindAlpha = 0;
             mNotificationsAlpha = 0;
         }
@@ -1532,7 +1535,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
 
         // When unlocking with fingerprint, we'll fade the scrims from black to transparent.
         // At the end of the animation we need to remove the tint.
-        if (state == ScrimState.UNLOCKED) {
+        if (state == ScrimState.UNLOCKED && !mKeyguardOccluded) {
             mInFrontTint = Color.TRANSPARENT;
             mBehindTint = mState.getBehindTint();
             mNotificationsTint = mState.getNotifTint();
