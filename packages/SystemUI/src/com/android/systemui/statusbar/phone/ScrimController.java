@@ -264,6 +264,8 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     private float mQsExpansion;
     private boolean mQsBottomVisible;
     private boolean mAnimatingPanelExpansionOnUnlock; // don't animate scrim
+    private boolean mIsTransitioningToSettings = false;
+    private float mPreviousQsExpansion = 0f;
 
     private boolean mDarkenWhileDragging;
     private boolean mExpansionAffectsAlpha = true;
@@ -903,6 +905,14 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         if (isNaN(expansionFraction)) {
             return;
         }
+
+        if (mQsExpansion == 1f && expansionFraction < 0.95f && expansionFraction > 0f) {
+            mIsTransitioningToSettings = true;
+        } else if (expansionFraction == 0f) {
+            mIsTransitioningToSettings = false;
+        }
+
+        mPreviousQsExpansion = mQsExpansion;
         expansionFraction = ShadeInterpolation.getNotificationScrimAlpha(expansionFraction);
         boolean qsBottomVisible = qsPanelBottomY > 0;
         if (mQsExpansion != expansionFraction || mQsBottomVisible != qsBottomVisible) {
@@ -914,6 +924,12 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
             if (!(relevantState && mExpansionAffectsAlpha)) {
                 return;
             }
+
+            if (mIsTransitioningToSettings) {
+                mAnimateChange = true;
+                mAnimationDuration = 200;
+            }
+
             applyAndDispatchState();
         }
     }
@@ -1179,8 +1195,16 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                     state.getBehindTint(), interpolatedFract);
             }
         }
+
         if (mQsExpansion > 0) {
-            behindAlpha = MathUtils.lerp(behindAlpha, getDefaultScrimAlpha(), mQsExpansion);
+        float targetAlpha = getDefaultScrimAlpha();
+        float lerpFactor = mQsExpansion;
+
+        if (mIsTransitioningToSettings && mQsExpansion < mPreviousQsExpansion) {
+            lerpFactor = 1f - ((1f - mQsExpansion) * (1f - mQsExpansion));
+        }
+
+        behindAlpha = MathUtils.lerp(behindAlpha, targetAlpha, lerpFactor);
             float tintProgress = mQsExpansion;
             if (mStatusBarKeyguardViewManager.isPrimaryBouncerInTransit()) {
                 // this is case of - on lockscreen - going from expanded QS to bouncer.
