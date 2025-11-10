@@ -238,6 +238,8 @@ public class DisplayRotation {
     private boolean mDemoHdmiRotationLock;
     private boolean mDemoRotationLock;
 
+    private boolean mPerAppRotationEnabled;
+
     DisplayRotation(WindowManagerService service, DisplayContent displayContent,
             DisplayAddress displayAddress, @NonNull DeviceStateController deviceStateController,
             @NonNull DisplayRotationCoordinator displayRotationCoordinator) {
@@ -880,6 +882,10 @@ public class DisplayRotation {
         return mUserRotationMode;
     }
 
+    public boolean isPerAppRotationEnabled() {
+        return mPerAppRotationEnabled;
+    }
+
     public void updateOrientationListener() {
         synchronized (mLock) {
             updateOrientationListenerLw();
@@ -1064,44 +1070,6 @@ public class DisplayRotation {
     int rotationForOrientation(@ScreenOrientation int orientation,
             @Surface.Rotation int lastRotation) {
 
-        final WindowContainer<?> source = mDisplayContent.getLastOrientationSource();
-        if (source != null) {
-            final ActivityRecord activity = source.asActivityRecord();
-            if (activity != null && activity.packageName != null) {
-                final String packageName = activity.packageName;
-
-                if (!packageName.equals(mLastRotationPackage)) {
-                    try {
-			final IActivityManager service = ActivityManager.getService();
-                        if (service != null) {
-                            mLastPerAppRotation = service.getRotationForApp(packageName);
-                            mLastRotationPackage = packageName;
-                        }
-                    } catch (RemoteException e) {
-                        mLastPerAppRotation = PER_APP_ROTATION_DEFAULT;
-                    }
-                }
-
-                final int perAppRotation = mLastPerAppRotation;
-                if (perAppRotation != PER_APP_ROTATION_DEFAULT) {
-                    switch (perAppRotation) {
-                        case PER_APP_ROTATION_PORTRAIT:
-                            orientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
-                            break;
-                        case PER_APP_ROTATION_LANDSCAPE:
-                            orientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
-                            break;
-                        case PER_APP_ROTATION_FULL_SENSOR:
-                            orientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR;
-                            break;
-                    }
-                }
-            }
-        } else {
-            mLastRotationPackage = null;
-            mLastPerAppRotation = PER_APP_ROTATION_DEFAULT;
-        }
-
         ProtoLog.v(WM_DEBUG_ORIENTATION,
                 "rotationForOrientation(orient=%s (%d), last=%s (%d)); user=%s (%d) %s",
                 ActivityInfo.screenOrientationToString(orientation), orientation,
@@ -1109,6 +1077,33 @@ public class DisplayRotation {
                 Surface.rotationToString(mUserRotation), mUserRotation,
                 mUserRotationMode == WindowManagerPolicy.USER_ROTATION_LOCKED
                         ? "USER_ROTATION_LOCKED" : "");
+
+        final WindowContainer<?> source = mDisplayContent.getLastOrientationSource();
+        if (source != null) {
+            final ActivityRecord activity = source.asActivityRecord();
+            if (activity != null && activity.packageName != null) {
+                final String packageName = activity.packageName;
+                if (!packageName.equals(mLastRotationPackage)) {
+                    try {
+                        final IActivityManager service = ActivityManager.getService();
+                        mLastPerAppRotation = service.getRotationForApp(packageName);
+                        mLastRotationPackage = packageName;
+                    } catch (RemoteException e) {
+                        mLastPerAppRotation = PER_APP_ROTATION_DEFAULT;
+                    }
+                }
+
+                switch (mLastPerAppRotation) {
+                    case PER_APP_ROTATION_PORTRAIT:
+                        return mPortraitRotation;
+                    case PER_APP_ROTATION_LANDSCAPE:
+                        return mLandscapeRotation;
+                    case PER_APP_ROTATION_FULL_SENSOR:
+                        orientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR;
+                        break;
+                }
+            }
+        }
 
         if (isFixedToUserRotation()) {
             return mUserRotation;
@@ -1480,6 +1475,13 @@ public class DisplayRotation {
 
         synchronized (mLock) {
             boolean shouldUpdateOrientationListener = false;
+
+            final boolean perAppRotationEnabled = Settings.System.getIntForUser(resolver,
+                    "per_app_rotation_enabled", 0, UserHandle.USER_CURRENT) == 1;
+            if (mPerAppRotationEnabled != perAppRotationEnabled) {
+                mPerAppRotationEnabled = perAppRotationEnabled;
+                shouldUpdateRotation = true;
+            }
 
             // Configure rotation suggestions.
             final int showRotationSuggestions =
@@ -2066,6 +2068,9 @@ public class DisplayRotation {
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.CAMERA_AUTOROTATE), false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    "per_app_rotation_enabled"), false, this,
                     UserHandle.USER_ALL);
 
             updateSettings();
