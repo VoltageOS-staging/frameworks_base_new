@@ -1454,11 +1454,9 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
             float alpha = MathUtils.lerp(startAlpha, finalScrimAlpha, animAmount);
             alpha = MathUtils.constrain(alpha, 0f, 1f);
             updateScrimColor(
-                scrim,
-                alpha,
-                (mState == ScrimState.KEYGUARD || mState == ScrimState.AOD || mState == ScrimState.PULSING)
-                ? Color.BLACK : Color.TRANSPARENT
-            );
+                    scrim,
+                    alpha,
+                    getCurrentScrimTint(scrim));
             dispatchScrimsVisible();
         });
         anim.setInterpolator(mInterpolator);
