@@ -58,7 +58,7 @@ constructor(
             createScrimAlphaFlow(
                 duration,
                 fromState,
-                primaryBouncerInteractor::willRunDismissFromKeyguard,
+                primaryBouncerInteractor::willRunDismissFromKeyguard
             )
         }
     }
@@ -79,9 +79,11 @@ constructor(
                         Edge.INVALID
                     } else {
                         Edge.create(from = from, to = Scenes.Gone)
-                    },
+                    }
             )
-            .setupWithoutSceneContainer(edge = Edge.create(from = from, to = GONE))
+            .setupWithoutSceneContainer(
+                edge = Edge.create(from = from, to = GONE),
+            )
             .sharedFlow(
                 duration = duration,
                 onStart = { leaveShadeOpen = statusBarStateController.leaveOpenOnKeyguardHide() },
@@ -96,7 +98,7 @@ constructor(
     private fun createScrimAlphaFlow(
         duration: Duration,
         fromState: KeyguardState,
-        willRunAnimationOnKeyguard: () -> Boolean,
+        willRunAnimationOnKeyguard: () -> Boolean
     ): Flow<ScrimAlpha> {
         var isShadeExpanded = false
         var leaveShadeOpen: Boolean = false
@@ -110,9 +112,11 @@ constructor(
                             Edge.INVALID
                         } else {
                             Edge.create(from = fromState, to = Scenes.Gone)
-                        },
+                        }
                 )
-                .setupWithoutSceneContainer(edge = Edge.create(from = fromState, to = GONE))
+                .setupWithoutSceneContainer(
+                    edge = Edge.create(from = fromState, to = GONE),
+                )
 
         return shadeInteractor.anyExpansion
             .map { it > 0f }
@@ -127,39 +131,27 @@ constructor(
                             willRunDismissFromKeyguard = willRunAnimationOnKeyguard()
                             isShadeExpanded = isAnyExpanded
                         },
-                        onStep = { it },
+                        onStep = { 1f - it },
                     )
                     .map {
-                        mapToScrimAlphas(
-                            it,
-                            willRunDismissFromKeyguard,
-                            isShadeExpanded,
-                            leaveShadeOpen
-                        )
+                        if (willRunDismissFromKeyguard) {
+                            if (isShadeExpanded) {
+                                ScrimAlpha(
+                                    behindAlpha = it,
+                                    notificationsAlpha = it,
+                                )
+                            } else {
+                                ScrimAlpha()
+                            }
+                        } else if (leaveShadeOpen) {
+                            ScrimAlpha(
+                                behindAlpha = 1f,
+                                notificationsAlpha = 1f,
+                            )
+                        } else {
+                            ScrimAlpha(behindAlpha = it)
+                        }
                     }
             }
-    }
-
-    private fun mapToScrimAlphas(
-        transitionProgress: Float,
-        willRunDismissFromKeyguard: Boolean,
-        isShadeExpanded: Boolean,
-        leaveShadeOpen: Boolean,
-    ): ScrimAlpha {
-        val invertedTransitionProgress = 1 - transitionProgress
-        return if (willRunDismissFromKeyguard) {
-            if (isShadeExpanded) {
-                ScrimAlpha(
-                    behindAlpha = invertedTransitionProgress,
-                    notificationsAlpha = invertedTransitionProgress,
-                )
-            } else {
-                ScrimAlpha()
-            }
-        } else if (leaveShadeOpen) {
-            ScrimAlpha(behindAlpha = 1f, notificationsAlpha = 1f)
-        } else {
-            ScrimAlpha(behindAlpha = invertedTransitionProgress)
-        }
     }
 }
