@@ -97,7 +97,12 @@ class BouncerToGoneFlowsTest(flags: FlagsParameterization) : SysuiTestCase() {
             whenever(primaryBouncerInteractor.willRunDismissFromKeyguard()).thenReturn(true)
 
             keyguardTransitionRepository.sendTransitionSteps(
-                listOf(step(0f, TransitionState.STARTED), step(0.3f), step(0.6f), step(1f)),
+                listOf(
+                    step(0f, TransitionState.STARTED),
+                    step(0.3f),
+                    step(0.6f),
+                    step(1f),
+                ),
                 testScope,
             )
 
@@ -119,7 +124,12 @@ class BouncerToGoneFlowsTest(flags: FlagsParameterization) : SysuiTestCase() {
             whenever(primaryBouncerInteractor.willRunDismissFromKeyguard()).thenReturn(true)
 
             keyguardTransitionRepository.sendTransitionSteps(
-                listOf(step(0f, TransitionState.STARTED), step(0.3f), step(0.6f), step(1f)),
+                listOf(
+                    step(0f, TransitionState.STARTED),
+                    step(0.3f),
+                    step(0.6f),
+                    step(1f),
+                ),
                 testScope,
             )
 
@@ -137,14 +147,18 @@ class BouncerToGoneFlowsTest(flags: FlagsParameterization) : SysuiTestCase() {
             sysuiStatusBarStateController.setLeaveOpenOnKeyguardHide(true)
 
             keyguardTransitionRepository.sendTransitionSteps(
-                listOf(step(0f, TransitionState.STARTED), step(0.3f), step(0.6f), step(1f)),
+                listOf(
+                    step(0f, TransitionState.STARTED),
+                    step(0.3f),
+                    step(0.6f),
+                    step(1f),
+                ),
                 testScope,
             )
 
             assertThat(values.size).isEqualTo(4)
             values.forEach {
-                assertThat(it.notificationsAlpha).isWithin(0.05f).of(1f)
-                assertThat(it.behindAlpha).isWithin(0.05f).of(1f)
+                assertThat(it).isEqualTo(ScrimAlpha(notificationsAlpha = 1f, behindAlpha = 1f))
             }
         }
 
@@ -190,7 +204,12 @@ class BouncerToGoneFlowsTest(flags: FlagsParameterization) : SysuiTestCase() {
             runCurrent()
 
             keyguardTransitionRepository.sendTransitionSteps(
-                listOf(step(0f, TransitionState.STARTED), step(0.3f), step(0.6f), step(1f)),
+                listOf(
+                    step(0f, TransitionState.STARTED),
+                    step(0.3f),
+                    step(0.6f),
+                    step(1f),
+                ),
                 testScope,
             )
 
@@ -203,14 +222,14 @@ class BouncerToGoneFlowsTest(flags: FlagsParameterization) : SysuiTestCase() {
 
     private fun step(
         value: Float,
-        state: TransitionState = TransitionState.RUNNING,
+        state: TransitionState = TransitionState.RUNNING
     ): TransitionStep {
         return TransitionStep(
             from = KeyguardState.PRIMARY_BOUNCER,
             to = KeyguardState.GONE,
             value = value,
             transitionState = state,
-            ownerName = "PrimaryBouncerToGoneTransitionViewModelTest",
+            ownerName = "PrimaryBouncerToGoneTransitionViewModelTest"
         )
     }
 }
