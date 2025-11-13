@@ -63,6 +63,7 @@ public final class PixelPropsUtils {
             "persist.sys.disguise_props_for_music_app";
     private static final String PACKAGE_ARCORE = "com.google.ar.core";
     private static final String PACKAGE_GMS = "com.google.android.gms";
+    private static final String PACKAGE_FINSKY = "com.android.vending";
     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
     private static final String PACKAGE_GOOGLE = "com.google";
     private static final String PACKAGE_NEXUS_LAUNCHER = "com.google.android.apps.nexuslauncher";
@@ -72,6 +73,7 @@ public final class PixelPropsUtils {
     private static final String PROP_HOOKS = "persist.sys.pihooks_";
     private static final String SPOOF_QSB = "persist.sys.pp.qsb";
     private static final String SPOOF_PP = "persist.sys.pp";
+    private static final String SPOOF_FINSKY = "persist.sys.pp.finsky";
     private static final String SPOOF_GAMES = "persist.sys.pp.games";
     private static final String SPOOF_GMS_CERT_CHAIN = "persist.sys.pp.gmscertchain";
     public static final String SPOOF_GMS = "persist.sys.pp.gms";
@@ -396,6 +398,18 @@ public final class PixelPropsUtils {
             return;
         }
         if (sIsExcluded) {
+            return;
+        }
+        if (packageName.equals(PACKAGE_FINSKY)) {
+            if (SystemProperties.getBoolean(SPOOF_FINSKY, false)) {
+                dlog("Spoofing a few props for: " + packageName);
+                final String[] finskyProps = {
+                    "FINGERPRINT", "SECURITY_PATCH", "DEVICE_INITIAL_SDK_INT"
+                };
+                for (String key : finskyProps) {
+                    setPropValue(key, SystemProperties.get(PROP_HOOKS + key));
+                }
+            }
             return;
         }
         if (sIsGms) {
