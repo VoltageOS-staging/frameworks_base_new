@@ -10214,6 +10214,18 @@ public class NotificationManagerService extends SystemService {
                                         getGroupInstanceId(r.getSbn().getGroupKey()));
                         notifyListenersPostedAndLogLocked(r, old, mTracker, maybeReport);
                         posted = true;
+
+                        // Now that the notification is posted, we can now consider sending a
+                        // censored copy of it to the foreground user (if the foreground user
+                        // differs from the intended recipient).
+                        final CensoredSendState state = getCensoredSendStateForNotification(r);
+                        if (state != CensoredSendState.DONT_SEND) {
+                            // Give the information directly so that we can release
+                            // mNotificationLock.
+                            mHandler.post(new EnqueueCensoredNotificationRunnable(
+                                    r.getSbn().getPackageName(), r.getUser().getIdentifier(),
+                                    r.getSbn().getId(), r.getSbn().getTag(), state));
+                        }
                     } else {
                         Slog.e(TAG, "Not posting notification without small icon: " + notification);
                         if (old != null && !old.isCanceled) {
