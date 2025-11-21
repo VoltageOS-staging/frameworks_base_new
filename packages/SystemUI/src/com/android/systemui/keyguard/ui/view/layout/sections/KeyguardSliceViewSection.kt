@@ -94,8 +94,7 @@ constructor(
                 ConstraintSet.PARENT_ID,
                 ConstraintSet.START,
                 context.resources.getDimensionPixelSize(clocksR.dimen.clock_padding_start) +
-                    context.resources.getDimensionPixelSize(clocksR.dimen.status_view_margin_horizontal) +
-                    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4f, context.resources.displayMetrics).toInt(),
+                    context.resources.getDimensionPixelSize(clocksR.dimen.status_view_margin_horizontal),
             )
             connect(
                 R.id.keyguard_slice_view,
