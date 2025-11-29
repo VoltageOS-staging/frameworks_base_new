@@ -17,6 +17,8 @@
 package com.android.systemui.shade.ui
 
 import android.content.Context
+import android.content.res.Configuration
+import android.graphics.Color
 import com.android.internal.graphics.ColorUtils
 import com.android.systemui.res.R
 
@@ -62,12 +64,48 @@ object ShadeColors {
         )
     }
 
+    private fun Context.isNightModeActive(): Boolean {
+        return (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == 
+                Configuration.UI_MODE_NIGHT_YES
+    }
+
     @JvmStatic
     private fun shadePanelStandard(context: Context): Int {
-        val layerAbove =
-            context.resources.getColor(com.android.internal.R.color.shade_panel_fg, context.theme)
-        val layerBelow =
-            context.resources.getColor(com.android.internal.R.color.shade_panel_bg, context.theme)
+        return if (context.isNightModeActive()) {
+            shadePanelStandardDark(context)
+        } else {
+            shadePanelStandardLight(context)
+        }
+    }
+
+    private fun shadePanelStandardLight(context: Context): Int {
+        val topLayerAlpha = 0.45f
+        
+        val layerAbove = ColorUtils.setAlphaComponent(
+            context.getColor(R.color.shade_panel_base),
+            (topLayerAlpha * 255).toInt()
+        )
+        
+        val layerBelow = ColorUtils.setAlphaComponent(
+            Color.parseColor("#F5F5F5"), 
+            (0.25f * 255).toInt()
+        )
+        
+        return ColorUtils.compositeColors(layerAbove, layerBelow)
+    }
+
+    private fun shadePanelStandardDark(context: Context): Int {
+        val topLayerAlpha = 0.50f
+        
+        val layerAbove = ColorUtils.setAlphaComponent(
+            context.getColor(R.color.shade_panel_base),
+            (topLayerAlpha * 255).toInt()
+        )
+        
+        val layerBelow = ColorUtils.setAlphaComponent(
+            Color.parseColor("#1A1A1A"),
+            (0.30f * 255).toInt()
+        )
         return ColorUtils.compositeColors(layerAbove, layerBelow)
     }
 
@@ -80,7 +118,7 @@ object ShadeColors {
     private fun notificationScrimStandard(context: Context): Int {
         return ColorUtils.setAlphaComponent(
             context.getColor(R.color.notification_scrim_base),
-            (0.5f * 255).toInt(),
+            (0.35f * 255).toInt(),
         )
     }
 
