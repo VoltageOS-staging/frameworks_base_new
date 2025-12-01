@@ -20,7 +20,6 @@ package com.android.systemui.qs.panels.ui.compose.infinitegrid
 
 import android.content.Context
 import android.content.res.Resources
-import android.database.ContentObserver
 import android.os.Trace
 import android.os.UserHandle
 import android.provider.Settings
@@ -30,27 +29,21 @@ import android.service.quicksettings.Tile.STATE_UNAVAILABLE
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.indication
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Arrangement.spacedBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -73,8 +66,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -186,29 +177,19 @@ fun ContentScope.Tile(
 
         val shapeMode = rememberTileShapeMode()
         // TODO(b/361789146): Draw the shapes instead of clipping
-        val wantCircle = shapeMode == 4 && iconOnly
-        val tileShape =
-            if (wantCircle) CircleShape
-            else TileDefaults.animateTileShapeAsState(uiState.state, shapeMode).value
+        val tileShape by TileDefaults.animateTileShapeAsState(uiState.state, shapeMode)
         val animatedColor by animateColorAsState(colors.background, label = "QSTileBackgroundColor")
         val isDualTarget = uiState.handlesSecondaryClick
 
-        val outerShape = if (wantCircle) RoundedCornerShape(0.dp) else tileShape
-        val outerColor: () -> Color = if (wantCircle) { { Color.Transparent } } else { { animatedColor } }
-        val focusBorderColor = MaterialTheme.colorScheme.secondary
-
         TileExpandable(
-            color = outerColor,
-            shape = outerShape,
+            color = { animatedColor },
+            shape = tileShape,
             squishiness = squishiness,
             hapticsViewModel = hapticsViewModel,
             modifier =
                 modifier
-                    .thenIf(!wantCircle) {
-                        modifier.borderOnFocus(color = focusBorderColor, outerShape.topEnd)
-                    }
+                    .borderOnFocus(color = MaterialTheme.colorScheme.secondary, tileShape.topEnd)
                     .fillMaxWidth()
-                    .height(CommonTileDefaults.TileHeight)
                     .bounceable(
                         bounceable = currentBounceableInfo.bounceable,
                         previousBounceable = currentBounceableInfo.previousTile,
@@ -234,7 +215,8 @@ fun ContentScope.Tile(
                     }
                     .takeIf { !useLongClickToSettings || uiState.handlesLongClick }
 
-            val click: () -> Unit = onClick@{
+            TileContainer(
+                onClick = onClick@{
                         if (!isClickable) return@onClick
 
                         val hasDetails =
@@ -269,50 +251,7 @@ fun ContentScope.Tile(
                             // And show footer text feedback for icons
                             requestToggleTextFeedback(tile.spec)
                         }
-                    }
-
-            if (wantCircle) {
-                val interaction = remember { MutableInteractionSource() }
-
-                Box(Modifier.fillMaxSize()) {
-                    Box(
-                        Modifier
-                            .size(CommonTileDefaults.TileHeight)
-                            .align(Alignment.Center)
-                            .clip(CircleShape)
-                            .background(animatedColor)
-                            .semantics(mergeDescendants = true) {
-                                role = Role.Button
-                                onClick(label = uiState.label?.toString()) {
-                                    click()
-                                    true
-                                }
-                                if (longClick != null) {
-                                    onLongClick(label = uiState.label?.toString()) {
-                                        longClick.invoke()
-                                        true
-                                    }
-                                }
-                            }
-                            .indication(interaction, LocalIndication.current)
-                            .combinedClickable(
-                                interactionSource = interaction,
-                                indication = null,
-                                onClick = { click() },
-                                onLongClick = { longClick?.invoke() }
-                            )
-                    ) {
-                        val iconProvider: Context.() -> Icon = { getTileIcon(icon = icon) }
-                        SmallTileContent(
-                            iconProvider = iconProvider,
-                            color = colors.icon,
-                            modifier = Modifier.align(Alignment.Center),
-                        )
-                    }
-                }
-            } else {
-            TileContainer(
-                onClick = click,
+                    },
                 onLongClick = longClick,
                 accessibilityUiState = uiState.accessibilityUiState,
                 iconOnly = iconOnly,
@@ -365,7 +304,6 @@ fun ContentScope.Tile(
                             Modifier.largeTilePadding(isDualTarget = uiState.handlesLongClick),
                     )
                 }
-            }
             }
         }
     }
@@ -503,29 +441,16 @@ data class TileColors(
 @Composable
 fun rememberTileShapeMode(): Int {
     val context = LocalContext.current
-    return produceState(initialValue = 0) {
-        val observer = object : ContentObserver(null) {
-            override fun onChange(selfChange: Boolean) {
-                value = Settings.System.getIntForUser(
-                    context.contentResolver, Settings.System.QS_TILE_SHAPE, 0, UserHandle.USER_CURRENT
-                )
-            }
+    return remember {
+        val cr = context.contentResolver
+        try {
+            Settings.System.getIntForUser(
+                cr, Settings.System.QS_TILE_SHAPE, 0, UserHandle.USER_CURRENT
+            )
+        } catch (_: Throwable) {
+            0
         }
-
-        context.contentResolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.QS_TILE_SHAPE),
-            false,
-            observer,
-            UserHandle.USER_ALL
-        )
-
-        // Initial load
-        observer.onChange(false)
-
-        awaitDispose {
-            context.contentResolver.unregisterContentObserver(observer)
-        }
-    }.value
+    }
 }
 
 private object TileDefaults {
@@ -645,10 +570,9 @@ private object TileDefaults {
         val animatedCornerRadius by
             animateDpAsState(
                 targetValue = when (shapeMode) {
-                        1 -> InactiveCornerRadius // Circle-ish
-                        2 -> activeCornerRadius // Rounded Square
-                        3 -> 0.dp // Square
-                        4 -> InactiveCornerRadius // Circle
+                        1 -> InactiveCornerRadius /* Circle */
+                        2 -> activeCornerRadius /* Rounded Square */
+                        3 -> 0.dp /* Square */
                         else -> if (state == STATE_ACTIVE) activeCornerRadius else InactiveCornerRadius
                     },
                 label = label,
