@@ -613,7 +613,7 @@ private object TileDefaults {
         val animatedCornerRadius by
             animateDpAsState(
                 targetValue =
-                    if (state == STATE_ACTIVE && !AxTileProvider.Flags.useAxProvider) {
+		if (state == STATE_ACTIVE) {
                         activeCornerRadius
                     } else {
                         InactiveCornerRadius

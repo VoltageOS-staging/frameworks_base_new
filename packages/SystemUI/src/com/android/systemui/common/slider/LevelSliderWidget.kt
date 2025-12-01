@@ -73,6 +73,13 @@ fun LevelSliderWidget(
         label = "level_animation"
     )
 
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isEnabled) 16.dp else 28.dp,
+        animationSpec = tween(300, easing = LinearOutSlowInEasing),
+        label = "corner_radius_animation"
+    )
+    val shape = RoundedCornerShape(cornerRadius)
+
     val density = LocalDensity.current
 
     val activeContentColor = if (isDozing) Color.White else AxColorScheme.onPrimary
@@ -103,10 +110,10 @@ fun LevelSliderWidget(
         modifier = modifier
             .height(dimens.height)
             .scale(enabledScale)
-            .clip(CircleShape)
-            .then(if (isDozing) Modifier.border(theme.dozeStroke, Color.White, CircleShape) else border)
+            .clip(shape)
+            .then(if (isDozing) Modifier.border(theme.dozeStroke, Color.White, shape) else border)
             .then(
-                if (isEnabled) Modifier.border(2.dp, AxColorScheme.primary.copy(alpha = 0.6f), CircleShape)
+                if (isEnabled) Modifier.border(2.dp, AxColorScheme.primary.copy(alpha = 0.6f), shape)
                 else Modifier
             )
             .pointerInput(Unit) {
@@ -134,13 +141,15 @@ fun LevelSliderWidget(
         val boxWidthPx = with(density) { maxWidth.toPx() }
         val fillWidth = boxWidthPx * animatedLevel
 
-        Box(Modifier.fillMaxSize().background(animatedTrackColor, CircleShape).clip(CircleShape))
+        Box(Modifier.fillMaxSize().background(animatedTrackColor, shape).clip(shape))
 
-        Canvas(Modifier.fillMaxSize().clip(CircleShape)) {
+        val cornerRadiusPx = with(density) { cornerRadius.toPx() }
+
+        Canvas(Modifier.fillMaxSize().clip(shape)) {
             drawRoundRect(
                 color = progressFillColor,
                 size = Size(fillWidth, size.height),
-                cornerRadius = CornerRadius(size.height / 2)
+                cornerRadius = CornerRadius(cornerRadiusPx)
             )
         }
 
