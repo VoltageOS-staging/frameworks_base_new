@@ -151,6 +151,7 @@ public class Clock extends TextView implements
 
     private boolean mIsStatusBar;
     private boolean mIsActiveClock = true;
+    private boolean mVisibleByModernization = true;
 
     /**
      * Color to be set on this {@link TextView}, when wallpaperTextColor is <b>not</b> utilized.
@@ -228,7 +229,7 @@ public class Clock extends TextView implements
         mClockVisibleByUser = bundle.getBoolean(VISIBLE_BY_USER, true);
         mShowSeconds = bundle.getBoolean(SHOW_SECONDS, false);
         if (bundle.containsKey(VISIBILITY)) {
-            super.setVisibility(bundle.getInt(VISIBILITY));
+            setVisibility(bundle.getInt(VISIBILITY));
         }
     }
 
@@ -366,6 +367,15 @@ public class Clock extends TextView implements
         mIsActiveClock = active;
     }
 
+    public void setVisibleByModernization(boolean visible) {
+        if (mVisibleByModernization == visible) return;
+        mVisibleByModernization = visible;
+
+        if (StatusBarRootModernization.isEnabled()) {
+            setVisibility(shouldBeVisible() ? View.VISIBLE : View.GONE);
+        }
+    }
+
     private void setClockVisibleByUser(boolean visible) {
         StatusBarRootModernization.assertInLegacyMode();
 
@@ -382,7 +392,7 @@ public class Clock extends TextView implements
 
     private boolean shouldBeVisible() {
         if (StatusBarRootModernization.isEnabled()) {
-            return !mClockAutoHide;
+            return mVisibleByModernization && !mClockAutoHide;
         }
 
         return !mClockAutoHide && mClockVisibleByPolicy && mClockVisibleByUser;
@@ -556,7 +566,7 @@ public class Clock extends TextView implements
         mClockAutoHide = clockAutoHide;
 
         if (StatusBarRootModernization.isEnabled()) {
-            setVisibility(clockAutoHide ? View.GONE : View.VISIBLE);
+            setVisibility(shouldBeVisible() ? View.VISIBLE : View.GONE);
         } else {
             updateClockVisibility();
         }
