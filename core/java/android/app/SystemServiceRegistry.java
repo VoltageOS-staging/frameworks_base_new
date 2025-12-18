@@ -2117,7 +2117,9 @@ public final class SystemServiceRegistry {
     /** @hide */
     public static void clearServiceCache(Context ctx) {
         for (ServiceFetcher fetcher : SYSTEM_SERVICE_FETCHERS.values()) {
-            fetcher.clearCache((ContextImpl) ctx);
+            if (ctx instanceof ContextImpl ctxImpl) {
+                fetcher.clearCache(ctxImpl);
+            }
         }
     }
 
