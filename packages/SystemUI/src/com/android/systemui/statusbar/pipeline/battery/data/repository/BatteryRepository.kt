@@ -21,6 +21,7 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
+import android.provider.Settings
 import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
@@ -50,7 +51,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.suspendCancellableCoroutine
-import lineageos.providers.LineageSettings
 
 /** Repository-style state for battery information. */
 interface BatteryRepository {
@@ -78,13 +78,13 @@ interface BatteryRepository {
     val isStateUnknown: Flow<Boolean>
 
     /**
-     * [LineageSettings.System.STATUS_BAR_BATTERY_STYLE]. A user setting to indicate the
+     * ["status_bar_battery_style"]. A user setting to indicate the
      * battery style in the home screen status bar
      */
     val batteryIconStyle: StateFlow<Int>
 
     /**
-     * [LineageSettings.System.STATUS_BAR_SHOW_BATTERY_PERCENT]. A user setting to indicate whether
+     * ["status_bar_show_battery_percent"]. A user setting to indicate whether
      * we should show the battery percentage in the home screen status bar
      */
     val showBatteryPercentMode: StateFlow<Int>
@@ -278,14 +278,11 @@ constructor(
     override val batteryIconStyle =
         callbackFlow {
                 val resolver = context.contentResolver
-                val uri =
-                    LineageSettings.System.getUriFor(
-                        LineageSettings.System.STATUS_BAR_BATTERY_STYLE
-                    )
+                val uri = Settings.System.getUriFor("status_bar_battery_style")
 
                 fun readMode(): Int {
-                    return LineageSettings.System.getIntForUser(
-                        resolver, LineageSettings.System.STATUS_BAR_BATTERY_STYLE,
+                    return Settings.System.getIntForUser(
+                        resolver, "status_bar_battery_style",
                         BatteryRepository.ICON_STYLE_DEFAULT, UserHandle.USER_CURRENT
                     )
                 }
@@ -316,15 +313,12 @@ constructor(
     override val showBatteryPercentMode =
         callbackFlow {
                 val resolver = context.contentResolver
-                val uri =
-                    LineageSettings.System.getUriFor(
-                        LineageSettings.System.STATUS_BAR_SHOW_BATTERY_PERCENT
-                    )
+                val uri = Settings.System.getUriFor("status_bar_show_battery_percent")
 
                 fun readMode(): Int {
-                    return LineageSettings.System.getIntForUser(
+                    return Settings.System.getIntForUser(
                         resolver,
-                        LineageSettings.System.STATUS_BAR_SHOW_BATTERY_PERCENT,
+                        "status_bar_show_battery_percent",
                         BatteryRepository.SHOW_PERCENT_HIDDEN,
                         UserHandle.USER_CURRENT,
                     )
