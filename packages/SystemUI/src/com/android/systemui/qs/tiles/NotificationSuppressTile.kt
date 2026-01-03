@@ -63,7 +63,7 @@ class NotificationSuppressTile @Inject constructor(
 
     override fun newTileState(): BooleanState {
         return BooleanState().apply {
-            handlesLongClick = false
+            handlesLongClick = true
         }
     }
 
@@ -101,9 +101,18 @@ class NotificationSuppressTile @Inject constructor(
         refreshState()
     }
 
-    override fun getLongClickIntent(): Intent {
-        return Intent(Settings.ACTION_SOUND_SETTINGS)
-    }
+    override fun handleLongClick(expandable: Expandable?) {
+        val infiniteIndex = controller.durations.indexOf(-1)
+        if (infiniteIndex != -1) {
+            if (controller.currentIndex == infiniteIndex && controller.isSuppressed) {
+                controller.setDuration(0)
+            } else {
+                controller.setDuration(infiniteIndex)
+            }
+        }
+     }
+ 
+    override fun getLongClickIntent(): Intent? = null
 
     override fun getTileLabel(): CharSequence {
         return mContext.getString(R.string.quick_settings_notif_suppress_label)

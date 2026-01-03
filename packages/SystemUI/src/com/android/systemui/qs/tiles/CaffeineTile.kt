@@ -61,7 +61,7 @@ class CaffeineTile @Inject constructor(
     private var label: String? = null
 
     override fun newTileState(): BooleanState = BooleanState().apply {
-        handlesLongClick = false
+        handlesLongClick = true
     }
 
     override fun handleClick(expandable: Expandable?) {
@@ -102,6 +102,17 @@ class CaffeineTile @Inject constructor(
     override fun onCaffeineStateChanged(active: Boolean, label: String) {
         this.label = label
         refreshState()
+    }
+
+    override fun handleLongClick(expandable: Expandable?) {
+        val infiniteIndex = controller.durations.indexOf(-1)
+        if (infiniteIndex != -1) {
+            if (controller.currentIndex == infiniteIndex && controller.isActive) {
+                controller.setDuration(0)
+            } else {
+                controller.setDuration(infiniteIndex)
+            }
+        }
     }
 
     override fun getLongClickIntent(): Intent? = null
