@@ -103,6 +103,9 @@ public class ThemeOverlayApplier implements Dumpable {
     static final String OVERLAY_BERRY_BLACK_THEME =
             "com.android.system.theme.black";
 
+    static final String OVERLAY_BERRY_BLACK_THEME_SYSUI =
+            "com.android.systemui.theme.black";
+
     @VisibleForTesting
     static final String OVERLAY_CATEGORY_FONT = "android.theme.customization.font";
     @VisibleForTesting
@@ -280,6 +283,13 @@ public class ThemeOverlayApplier implements Dumpable {
         OverlayManagerTransaction.Builder transaction = getTransactionBuilder();
         try {
             transaction.setEnabled(getOverlayID(OVERLAY_BERRY_BLACK_THEME), blackMode, currentUser);
+
+            try {
+                transaction.setEnabled(getOverlayID(OVERLAY_BERRY_BLACK_THEME_SYSUI), blackMode, currentUser);
+            } catch (IllegalStateException e) {
+                if (DEBUG) Log.d(TAG, "Black Theme SysUI overlay not found, skipping.");
+            }
+
             transaction.setEnabled(getOverlayID("android:neutral"), !blackMode, currentUser);
             mOverlayManager.commit(transaction.build());
             if (onComplete != null) {
