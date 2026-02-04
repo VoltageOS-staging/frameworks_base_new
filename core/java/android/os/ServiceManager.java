@@ -28,6 +28,8 @@ import com.android.internal.os.BinderInternal;
 import com.android.internal.util.Preconditions;
 import com.android.internal.util.StatLogger;
 
+import com.android.internal.util.voltage.HideAppListUtils;
+
 import java.util.Map;
 
 /**
@@ -167,6 +169,10 @@ public final class ServiceManager {
     @UnsupportedAppUsage
     @android.ravenwood.annotation.RavenwoodReplace
     public static IBinder getService(String name) {
+        if (shouldHideServiceLocked(name)) {
+            return null;
+        }
+
         try {
             IBinder service = sCache.get(name);
             if (service != null) {
@@ -272,6 +278,10 @@ public final class ServiceManager {
      */
     @UnsupportedAppUsage
     public static IBinder checkService(String name) {
+        if (shouldHideServiceLocked(name)) {
+            return null;
+        }
+
         try {
             IBinder service = sCache.get(name);
             if (service != null) {
@@ -373,6 +383,16 @@ public final class ServiceManager {
     @UnsupportedAppUsage
     public static String[] listServices() {
         try {
+            if (Process.myUid() != Process.SYSTEM_UID && Process.myUid() != Process.ROOT_UID) {
+                java.util.List<String> filtered = new java.util.ArrayList<>();
+                for (String name : services) {
+                    if (!HideAppListUtils.shouldHideService(name)) {
+                        filtered.add(name);
+                    }
+                }
+                return filtered.toArray(new String[0]);
+            }
+
             return getIServiceManager().listServices(IServiceManager.DUMP_FLAG_PRIORITY_ALL);
         } catch (RemoteException e) {
             Log.e(TAG, "error in listServices", e);
@@ -392,6 +412,13 @@ public final class ServiceManager {
             Log.e(TAG, "error in getServiceDebugInfo", e);
             return null;
         }
+    }
+
+    private static boolean shouldHideServiceLocked(String name) {
+        if (Process.myUid() != Process.SYSTEM_UID && Process.myUid() != Process.ROOT_UID) {
+            return HideAppListUtils.shouldHideService(name);
+        }
+        return false;
     }
 
     /**

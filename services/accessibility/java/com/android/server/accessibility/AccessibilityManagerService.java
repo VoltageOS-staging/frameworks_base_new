@@ -1557,6 +1557,15 @@ public class AccessibilityManagerService extends IAccessibilityManager.Stub
                 serviceInfos.remove(i);
             }
         }
+
+        if (Binder.getCallingUid() != Process.SYSTEM_UID && Binder.getCallingUid() != Process.ROOT_UID) {
+            serviceInfos.removeIf(info -> 
+                info.getResolveInfo() != null && 
+                info.getResolveInfo().serviceInfo != null &&
+                HideAppListUtils.shouldHideAppList(mContext, 
+                    info.getResolveInfo().serviceInfo.packageName));
+        }
+
         return new ParceledListSlice<>(serviceInfos);
     }
 
@@ -1599,6 +1608,19 @@ public class AccessibilityManagerService extends IAccessibilityManager.Stub
                     result.add(service.getServiceInfo());
                 }
             }
+
+            if (Binder.getCallingUid() != Process.SYSTEM_UID && Binder.getCallingUid() != Process.ROOT_UID) {
+                java.util.Iterator<AccessibilityServiceInfo> i = result.iterator();
+                while (i.hasNext()) {
+                    AccessibilityServiceInfo info = i.next();
+                    if (info.getResolveInfo() != null && 
+                        info.getResolveInfo().serviceInfo != null &&
+                        HideAppListUtils.shouldHideAppList(mContext, info.getResolveInfo().serviceInfo.packageName)) {
+                        i.remove();
+                    }
+                }
+            }
+
             return result;
         }
     }

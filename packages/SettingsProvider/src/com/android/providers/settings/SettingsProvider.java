@@ -124,7 +124,9 @@ import android.util.proto.ProtoOutputStream;
 
 import com.android.internal.accessibility.util.AccessibilityUtils;
 import com.android.internal.annotations.GuardedBy;
+import com.android.internal.util.voltage.HideAppListUtils;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.util.voltage.HideAppListUtils;
 import com.android.internal.content.PackageMonitor;
 import com.android.internal.display.RefreshRateSettingsUtils;
 import com.android.internal.os.BackgroundThread;
@@ -453,6 +455,44 @@ public class SettingsProvider extends ContentProvider {
     public Bundle call(String method, String name, Bundle args) {
         final @CanBeCURRENT @UserIdInt int requestingUserId = getRequestingUserId(args);
         final int callingDeviceId = getDeviceId();
+
+        if (name != null) {
+           boolean shouldSpoof = HideAppListUtils.shouldSpoofSetting(name);
+            boolean isMockLoc = "mock_location".equals(name);
+
+            if (shouldSpoof || isMockLoc) {
+                int uid = Binder.getCallingUid();
+                if (uid != Process.SYSTEM_UID && uid != Process.ROOT_UID) {
+                    String spoofedValue = "0";
+                    if (shouldSpoof) {
+                        String val = HideAppListUtils.getSpoofedSetting(getContext(), name);
+                        if (val != null) spoofedValue = val;
+                    }
+                    Bundle bundle = new Bundle();
+                    bundle.putString(Settings.NameValueTable.VALUE, spoofedValue);
+                    return bundle;
+                }
+            }
+        }
+
+        if (name != null) {
+            boolean shouldSpoof = HideAppListUtils.shouldSpoofSetting(name);
+            boolean isMockLoc = "mock_location".equals(name);
+            if (shouldSpoof || isMockLoc) {
+                int uid = Binder.getCallingUid();
+                if (uid != Process.SYSTEM_UID && uid != Process.ROOT_UID) {
+                    String spoofedValue = "0";
+                    if (shouldSpoof) {
+                        String val = HideAppListUtils.getSpoofedSetting(getContext(), name);
+                        if (val != null) spoofedValue = val;
+                    }
+                    Bundle bundle = new Bundle();
+                    bundle.putString(Settings.NameValueTable.VALUE, spoofedValue);
+                    return bundle;
+                }
+            }
+        }
+
         switch (method) {
             case Settings.CALL_METHOD_GET_CONFIG -> {
                 Setting setting = getConfigSetting(name);

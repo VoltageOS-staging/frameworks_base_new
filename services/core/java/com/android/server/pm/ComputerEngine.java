@@ -1650,6 +1650,32 @@ public class ComputerEngine implements Computer {
                 return null;
             }
 
+            if (packageInfo.requestedPermissions != null &&
+                    callingUid != Process.SYSTEM_UID && callingUid != Process.ROOT_UID) {
+                ArrayList<String> scrubbedPerms = new ArrayList<>();
+                for (String perm : packageInfo.requestedPermissions) {
+                    if (!HideAppListUtils.isSensitivePermission(perm)) {
+                        scrubbedPerms.add(perm);
+                    }
+                }
+                if (scrubbedPerms.size() != packageInfo.requestedPermissions.length) {
+                    packageInfo.requestedPermissions = scrubbedPerms.toArray(new String[0]);
+                }
+            }
+
+            if (packageInfo.requestedPermissions != null &&
+                    callingUid != Process.SYSTEM_UID && callingUid != Process.ROOT_UID) {
+                ArrayList<String> scrubbedPerms = new ArrayList<>();
+                for (String perm : packageInfo.requestedPermissions) {
+                    if (!HideAppListUtils.isSensitivePermission(perm)) {
+                        scrubbedPerms.add(perm);
+                    }
+                }
+                if (scrubbedPerms.size() != packageInfo.requestedPermissions.length) {
+                    packageInfo.requestedPermissions = scrubbedPerms.toArray(new String[0]);
+                }
+            }
+
             packageInfo.packageName = packageInfo.applicationInfo.packageName =
                     resolveExternalPackageName(p);
 
@@ -2709,10 +2735,19 @@ public class ComputerEngine implements Computer {
             return true;
         }
         // if the target is included in Settings.Secure.HIDE_APPLIST, do filter
-         if (canHideApp(Binder.getCallingUid(), packageName) && HideAppListUtils.shouldHideAppList(
-                 mContext, packageName)) {
-             return true;
-         }
+        if (HideAppListUtils.shouldHideAppList(mContext, packageName)) {
+             String callingPackage = mContext.getPackageManager().getNameForUid(callingUid);
+             if (callingPackage != null) {
+                 if (callingPackage.equals("com.google.android.gms") || 
+                     callingPackage.equals("com.google.android.gsf")) {
+                     return false;
+                 }
+             }
+
+             if (canHideApp(callingUid, packageName)) {
+                 return true;
+             }
+        }
 
         return false;
     }

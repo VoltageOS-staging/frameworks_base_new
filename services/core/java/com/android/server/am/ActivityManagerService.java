@@ -441,6 +441,7 @@ import com.android.internal.pm.pkg.parsing.ParsingPackageUtils;
 import com.android.internal.policy.AttributeCache;
 import com.android.internal.util.ArrayUtils;
 import com.android.internal.util.DumpUtils;
+import com.android.internal.util.voltage.HideAppListUtils;
 import com.android.internal.util.FastPrintWriter;
 import com.android.internal.util.FrameworkStatsLog;
 import com.android.internal.util.MemInfoReader;
@@ -10146,11 +10147,26 @@ public class ActivityManagerService extends IActivityManager.Stub
         final boolean allUids = mAtmInternal.isGetTasksAllowed(
                 "getRunningAppProcesses", Binder.getCallingPid(), callingUid);
 
+        List<ActivityManager.RunningAppProcessInfo> processes;
         synchronized (mProcLock) {
             // Iterate across all processes
-            return mProcessList.getRunningAppProcessesLOSP(allUsers, userId, allUids,
+            processes = mProcessList.getRunningAppProcessesLOSP(allUsers, userId, allUids,
                     callingUid, clientTargetSdk);
         }
+
+        if (processes != null && callingUid != Process.SYSTEM_UID && callingUid != Process.ROOT_UID) {
+            processes.removeIf(info -> {
+                if (HideAppListUtils.shouldHideProcess(mContext, info.processName)) return true;
+                if (info.pkgList != null) {
+                    for (String pkg : info.pkgList) {
+                        if (HideAppListUtils.shouldHideProcess(mContext, pkg)) return true;
+                    }
+                }
+                return false;
+            });
+        }
+
+        return processes;
     }
 
     @Override
