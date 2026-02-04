@@ -10,6 +10,8 @@ import android.system.keystore2.KeyMetadata;
 
 import com.android.internal.org.bouncycastle.asn1.ASN1Sequence;
 import com.android.internal.org.bouncycastle.asn1.ASN1Primitive;
+import com.android.internal.org.bouncycastle.asn1.ASN1EncodableVector;
+import com.android.internal.org.bouncycastle.asn1.DERSequence;
 import com.android.internal.org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import com.android.internal.org.bouncycastle.asn1.pkcs.RSAPrivateKey;
 import com.android.internal.org.bouncycastle.asn1.sec.ECPrivateKey;
@@ -117,12 +119,24 @@ public class KeyboxUtils {
     }
 
     public static void putCertificateChain(KeyMetadata metadata, Certificate[] chain) throws Exception {
-        metadata.certificate = chain[0].getEncoded();
-        var output = new ByteArrayOutputStream();
-        for (int i = 1; i < chain.length; i++) {
-            output.write(chain[i].getEncoded());
+        if (chain == null || chain.length == 0) {
+            throw new IllegalArgumentException("Certificate chain cannot be null or empty");
         }
-        metadata.certificateChain = output.toByteArray();
+
+        metadata.certificate = chain[0].getEncoded();
+        if (chain.length > 1) {
+            ASN1EncodableVector certVector = new ASN1EncodableVector();
+            for (int i = 1; i < chain.length; i++) {
+                com.android.internal.org.bouncycastle.asn1.x509.Certificate cert = 
+                    com.android.internal.org.bouncycastle.asn1.x509.Certificate.getInstance(
+                        ASN1Primitive.fromByteArray(chain[i].getEncoded())
+                    );
+                certVector.add(cert);
+            }
+            metadata.certificateChain = new DERSequence(certVector).getEncoded();
+        } else {
+            metadata.certificateChain = new byte[0];
+        }
     }
 
     public static X509Certificate getCertificateFromHolder(X509CertificateHolder holder) throws Exception {

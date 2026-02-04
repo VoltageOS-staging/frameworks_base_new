@@ -97,6 +97,16 @@ public class KeyboxImitationHooks {
             if (chain == null || chain.isEmpty()) {
                 return null;
             }
+
+            for (int i = 0; i < chain.size(); i++) {
+                if (chain.get(i) == null) {
+                    Log.e(TAG, "Certificate at index " + i + " is null");
+                    return null;
+                }
+            }
+
+            dlog("Certificate chain generated successfully with " + chain.size() + " certificates");
+
             KeyEntryResponse response = buildResponse(level, chain, params, descriptor);
             if (response == null) {
                 return null;
@@ -122,7 +132,13 @@ public class KeyboxImitationHooks {
             KeyMetadata metadata = new KeyMetadata();
             metadata.keySecurityLevel = params.securityLevel;
 
-            KeyboxUtils.putCertificateChain(metadata, chain.toArray(new Certificate[chain.size()]));
+            Certificate[] certArray = chain.toArray(new Certificate[chain.size()]);
+            try {
+                KeyboxUtils.putCertificateChain(metadata, certArray);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to encode certificate chain", e);
+                return null;
+            }
 
             KeyDescriptor d = new KeyDescriptor();
             d.domain = descriptor.domain;
