@@ -365,10 +365,17 @@ public class Clock extends TextView implements
         // Setting text actually triggers a layout pass (because the text view is set to
         // wrap_content width and TextView always relayouts for this). Avoid needless
         // relayout if the text didn't actually change.
-        if (forceTextUpdate || !TextUtils.equals(smallTime, getText())) {
-            setText(smallTime);
+        Runnable updateText = () -> {
+            if (forceTextUpdate || !TextUtils.equals(smallTime, getText())) {
+                setText(smallTime);
+            }
+            setContentDescription(mContentDescriptionFormat.format(mCalendar.getTime()));
+        };
+        if (isInLayout()) {
+            post(updateText);
+        } else {
+            updateText.run();
         }
-        setContentDescription(mContentDescriptionFormat.format(mCalendar.getTime()));
     }
 
     final void updateClock() {

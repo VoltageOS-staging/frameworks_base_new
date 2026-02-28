@@ -40,7 +40,15 @@ object ShadeCarrierBinder {
 
         carrierTextView.repeatWhenAttached {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch { viewModel.carrierName.collect { carrierTextView.text = it } }
+                launch { 
+                    viewModel.carrierName.collect { 
+                        if (carrierTextView.isInLayout) {
+                            carrierTextView.post { carrierTextView.text = it }
+                        } else {
+                            carrierTextView.text = it
+                        }
+                    } 
+                }
             }
         }
 

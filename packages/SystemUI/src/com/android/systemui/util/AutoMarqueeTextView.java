@@ -55,7 +55,11 @@ public class AutoMarqueeTextView extends SafeMarqueeTextView {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        setSelected(true);
+        if (isInLayout()) {
+            post(() -> setSelected(true));
+        } else {
+            setSelected(true);
+        }
     }
 
     @Override
@@ -70,10 +74,17 @@ public class AutoMarqueeTextView extends SafeMarqueeTextView {
         if (isVisible == mAggregatedVisible) return;
 
         mAggregatedVisible = isVisible;
-        if (mAggregatedVisible) {
-            setEllipsize(TextUtils.TruncateAt.MARQUEE);
+        Runnable updateEllipsize = () -> {
+            if (mAggregatedVisible) {
+                setEllipsize(TextUtils.TruncateAt.MARQUEE);
+            } else {
+                setEllipsize(TextUtils.TruncateAt.END);
+            }
+        };
+        if (isInLayout()) {
+            post(updateEllipsize);
         } else {
-            setEllipsize(TextUtils.TruncateAt.END);
+            updateEllipsize.run();
         }
     }
 }

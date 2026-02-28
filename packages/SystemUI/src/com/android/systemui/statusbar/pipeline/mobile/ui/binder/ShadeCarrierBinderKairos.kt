@@ -48,7 +48,11 @@ object ShadeCarrierBinderKairos {
                         viewModel.applySpec().carrierName.observe(
                             name = nameTag { "ShadeCarrierBinderKairos(subId=$subId).carrierName" }
                         ) {
-                            carrierTextView.text = it
+                            if (carrierTextView.isInLayout) {
+                                carrierTextView.post { carrierTextView.text = it }
+                            } else {
+                                carrierTextView.text = it
+                            }
                         }
                     }
                 }
