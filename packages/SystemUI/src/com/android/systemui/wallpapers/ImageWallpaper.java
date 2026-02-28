@@ -38,7 +38,9 @@ import android.os.SystemProperties;
 import android.os.Trace;
 import android.service.wallpaper.WallpaperService;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.Surface;
+import android.view.SurfaceControl;
 import android.view.SurfaceHolder;
 
 import androidx.annotation.NonNull;
@@ -48,6 +50,7 @@ import com.android.systemui.dagger.qualifiers.LongRunning;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.utils.windowmanager.WindowManagerProvider;
+import com.android.systemui.atmosphere.AtmosphereController;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -71,15 +74,10 @@ public class ImageWallpaper extends WallpaperService {
     private final UserTracker mUserTracker;
     private final WindowManagerProvider mWindowManagerProvider;
 
-    // used to handle WallpaperService messages (e.g. DO_ATTACH, MSG_UPDATE_SURFACE)
-    // and to receive WallpaperService callbacks (e.g. onCreateEngine, onSurfaceRedrawNeeded)
     private HandlerThread mWorker;
-
-    // used for most tasks (call canvas.drawBitmap, load/unload the bitmap)
     @LongRunning
     private final DelayableExecutor mLongExecutor;
 
-    // wait at least this duration before unloading the bitmap
     private static final int DELAY_UNLOAD_BITMAP = 2000;
 
     @Inject
@@ -93,10 +91,6 @@ public class ImageWallpaper extends WallpaperService {
 
     @Override
     public Looper onProvideEngineLooper() {
-        // Receive messages on mWorker thread instead of SystemUI's main handler.
-        // All other wallpapers have their own process, and they can receive messages on their own
-        // main handler without any delay. But since ImageWallpaper lives in SystemUI, performance
-        // of the image wallpaper could be negatively affected when SystemUI's main handler is busy.
         return mWorker != null ? mWorker.getLooper() : super.onProvideEngineLooper();
     }
 
@@ -124,23 +118,11 @@ public class ImageWallpaper extends WallpaperService {
         private Bitmap mBitmap;
         private boolean mWideColorGamut = false;
 
-        /*
-         * Counter to unload the bitmap as soon as possible.
-         * Before any bitmap operation, this is incremented.
-         * After an operation completion, this is decremented (synchronously),
-         * and if the count is 0, unload the bitmap
-         */
         private int mBitmapUsages = 0;
-
-        /**
-         * Main lock for long operations (loading the bitmap or processing colors).
-         */
         private final Object mLock = new Object();
-
-        /**
-         * Lock for SurfaceHolder operations. Should only be acquired after the main lock.
-         */
         private final Object mSurfaceLock = new Object();
+        
+        private AtmosphereController mAtmosphereController;
 
         CanvasEngine() {
             super();
@@ -178,7 +160,6 @@ public class ImageWallpaper extends WallpaperService {
                         }
                     });
 
-            // if the number of pages is already computed, transmit it to the color extractor
             if (mPagesComputed) {
                 mColorExtractor.onPageChanged(mPages);
             }
@@ -197,11 +178,33 @@ public class ImageWallpaper extends WallpaperService {
             int width = Math.max(MIN_SURFACE_WIDTH, dimensions.width());
             int height = Math.max(MIN_SURFACE_HEIGHT, dimensions.height());
             mSurfaceHolder.setFixedSize(width, height);
+            
+            // Required for Touch Ripple and Depth Push
+            setTouchEventsEnabled(true);
 
             getDisplayContext().getSystemService(DisplayManager.class)
                     .registerDisplayListener(this, null);
             getDisplaySizeAndUpdateColorExtractor();
             Trace.endSection();
+            
+            Rect frame = surfaceHolder.getSurfaceFrame();
+            mAtmosphereController = new AtmosphereController(
+                    getDisplayContext(),
+                    getEngineSurfaceControl(),
+                    frame.width(),
+                    frame.height()
+            );
+        }
+
+        private SurfaceControl getEngineSurfaceControl() {
+            try {
+                java.lang.reflect.Field field = android.service.wallpaper.WallpaperService.Engine.class.getDeclaredField("mSurfaceControl");
+                field.setAccessible(true);
+                return (SurfaceControl) field.get(this);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to get SurfaceControl for Atmosphere", e);
+                return null;
+            }
         }
 
         @Override
@@ -212,6 +215,11 @@ public class ImageWallpaper extends WallpaperService {
                 if (displayManager != null) displayManager.unregisterDisplayListener(this);
             }
             mColorExtractor.cleanUp();
+            
+            if (mAtmosphereController != null) {
+                mAtmosphereController.destroy();
+                mAtmosphereController = null;
+            }
         }
 
         @Override
@@ -225,9 +233,21 @@ public class ImageWallpaper extends WallpaperService {
         }
 
         @Override
+        public void onVisibilityChanged(boolean visible) {
+            super.onVisibilityChanged(visible);
+            if (mAtmosphereController != null) {
+                if (visible) mAtmosphereController.onResume();
+                else mAtmosphereController.onPause();
+            }
+        }
+
+        @Override
         public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             if (DEBUG) {
                 Log.d(TAG, "onSurfaceChanged: width=" + width + ", height=" + height);
+            }
+            if (mAtmosphereController != null) {
+                mAtmosphereController.onSurfaceChanged(width, height);
             }
         }
 
@@ -268,7 +288,6 @@ public class ImageWallpaper extends WallpaperService {
         }
 
         private void drawFrameInternal() {
-            // load the wallpaper if not already done
             if (!isBitmapLoaded()) {
                 loadWallpaperAndDrawFrameInternal();
             } else {
@@ -302,20 +321,14 @@ public class ImageWallpaper extends WallpaperService {
                 Rect dest = mSurfaceHolder.getSurfaceFrame();
                 try {
                     int blurType = SystemProperties.getInt("persist.sys.wallpaper.blur_enabled", 0);
-                    // allow for both home and ls wallpaper, lockscreen only, home only
                     if (blurType == 1 || (blurType == 2 && isLockScreenWallpaper()) || (blurType == 3 && !isLockScreenWallpaper())) {
                         int userBlurRadius;
                         switch (blurType) {
-                            case 1: // Frosted glass
-                                userBlurRadius = 200;
-                                break;
-                            default: // Glass
-                                userBlurRadius = 25;
-                                break;
+                            case 1: userBlurRadius = 200; break;
+                            default: userBlurRadius = 25; break;
                         }
                         bitmap = WallpaperUtils.getBlurredBitmap(bitmap, userBlurRadius, getDisplayContext());
                     }
-                    // allow for both home and ls wallpaper, lockscreen only, home only
                     int dimType = SystemProperties.getInt("persist.sys.wallpaper.dim_enabled", 0);
                     if (dimType == 1 || (dimType == 2 && isLockScreenWallpaper()) || (dimType == 3 && !isLockScreenWallpaper())) {
                         int dimLevel = SystemProperties.getInt("persist.sys.wallpaper.dim_level", 10);
@@ -330,10 +343,9 @@ public class ImageWallpaper extends WallpaperService {
             Trace.endSection();
         }
 
-	    private boolean isLockScreenWallpaper() {
-		    return (this.getWallpaperFlags() & FLAG_LOCK)
-				    == FLAG_LOCK;
-	    }
+        private boolean isLockScreenWallpaper() {
+            return (this.getWallpaperFlags() & FLAG_LOCK) == FLAG_LOCK;
+        }
 
         @VisibleForTesting
         boolean isBitmapLoaded() {
@@ -375,6 +387,7 @@ public class ImageWallpaper extends WallpaperService {
             Trace.beginSection("WPMS.ImageWallpaper.CanvasEngine#loadWallpaper");
             boolean loadSuccess = false;
             Bitmap bitmap;
+
             try {
                 Trace.beginSection("WPMS.getBitmapAsUser");
                 bitmap = mWallpaperManager.getBitmapAsUser(
@@ -384,10 +397,6 @@ public class ImageWallpaper extends WallpaperService {
                     throw new RuntimeException("Wallpaper is too large to draw!");
                 }
             } catch (RuntimeException | OutOfMemoryError exception) {
-
-                // Note that if we do fail at this, and the default wallpaper can't
-                // be loaded, we will go into a cycle. Don't do a build where the
-                // default wallpaper can't be loaded.
                 Log.w(TAG, "Unable to load wallpaper!", exception);
                 Trace.beginSection("WPMS.clearWallpaper");
                 mWallpaperManager.clearWallpaper(getWallpaperFlags(), mUserTracker.getUserId());
@@ -414,9 +423,7 @@ public class ImageWallpaper extends WallpaperService {
             } else if (mBitmap == bitmap) {
                 Log.e(TAG, "Loaded a bitmap that was already loaded");
             } else {
-                // at this point, loading is done correctly.
                 loadSuccess = true;
-                // recycle the previously loaded bitmap
                 if (mBitmap != null) {
                     Trace.beginSection("WPMS.mBitmap.recycle");
                     mBitmap.recycle();
@@ -427,7 +434,6 @@ public class ImageWallpaper extends WallpaperService {
                 mWideColorGamut = mWallpaperManager.wallpaperSupportsWcg(getSourceFlag());
                 Trace.endSection();
 
-                // +2 usages for the color extraction and the delayed unload.
                 mBitmapUsages += 2;
                 Trace.beginSection("WPMS.recomputeColorExtractorMiniBitmap");
                 recomputeColorExtractorMiniBitmap();
@@ -436,16 +442,9 @@ public class ImageWallpaper extends WallpaperService {
                 drawFrameInternal();
                 Trace.endSection();
 
-                /*
-                 * after loading, the bitmap will be unloaded after all these conditions:
-                 *   - the frame is redrawn
-                 *   - the mini bitmap from color extractor is recomputed
-                 *   - the DELAY_UNLOAD_BITMAP has passed
-                 */
                 mLongExecutor.executeDelayed(
                         this::unloadBitmapIfNotUsedSynchronized, DELAY_UNLOAD_BITMAP);
             }
-            // even if the bitmap cannot be loaded, call reportEngineShown
             if (!loadSuccess) reportEngineShown(false);
             Trace.endSection();
         }
@@ -458,11 +457,6 @@ public class ImageWallpaper extends WallpaperService {
             }
         }
 
-        /**
-         * Helper to return the flag from where the source bitmap is from.
-         * Similar to {@link #getWallpaperFlags()}, but returns (FLAG_SYSTEM) instead of
-         * (FLAG_LOCK | FLAG_SYSTEM) if this engine is used for both lock screen & home screen.
-         */
         private @SetWallpaperFlags int getSourceFlag() {
             return getWallpaperFlags() == FLAG_LOCK ? FLAG_LOCK : FLAG_SYSTEM;
         }
@@ -479,7 +473,11 @@ public class ImageWallpaper extends WallpaperService {
 
         @Override
         public @Nullable WallpaperColors onComputeColors() {
-            return mColorExtractor.onComputeColors();
+            WallpaperColors colors = mColorExtractor.onComputeColors();
+            if (mAtmosphereController != null) {
+                mAtmosphereController.onWallpaperColorsChanged(colors);
+            }
+            return colors;
         }
 
         @Override
@@ -489,16 +487,20 @@ public class ImageWallpaper extends WallpaperService {
 
         @Override
         public void addLocalColorsAreas(@NonNull List<RectF> regions) {
-            // this call will activate the offset notifications
-            // if no colors were being processed before
             mColorExtractor.addLocalColorsAreas(regions);
         }
 
         @Override
         public void removeLocalColorsAreas(@NonNull List<RectF> regions) {
-            // this call will deactivate the offset notifications
-            // if we are no longer processing colors
             mColorExtractor.removeLocalColorAreas(regions);
+        }
+
+        @Override
+        public void onTouchEvent(MotionEvent event) {
+            super.onTouchEvent(event);
+            if (mAtmosphereController != null) {
+                mAtmosphereController.onTouchEvent(event);
+            }
         }
 
         @Override
@@ -516,6 +518,9 @@ public class ImageWallpaper extends WallpaperService {
                 mPagesComputed = true;
                 mColorExtractor.onPageChanged(mPages);
             }
+            if (mAtmosphereController != null) {
+                mAtmosphereController.onOffsetsChanged(xOffset);
+            }
         }
 
         @Override
@@ -524,21 +529,15 @@ public class ImageWallpaper extends WallpaperService {
         }
 
         @Override
-        public void onDisplayAdded(int displayId) {
-
-        }
+        public void onDisplayAdded(int displayId) {}
 
         @Override
-        public void onDisplayRemoved(int displayId) {
-
-        }
+        public void onDisplayRemoved(int displayId) {}
 
         @Override
         public void onDisplayChanged(int displayId) {
             Trace.beginSection("ImageWallpaper.CanvasEngine#onDisplayChanged");
             try {
-                // changes the display in the color extractor
-                // the new display dimensions will be used in the next color computation
                 if (displayId == getDisplayContext().getDisplayId()) {
                     getDisplaySizeAndUpdateColorExtractor();
                 }
