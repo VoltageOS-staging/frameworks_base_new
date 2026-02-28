@@ -38,6 +38,7 @@ import android.service.notification.StatusBarNotification;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import android.util.LruCache;
 import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.LayoutInflater;
@@ -66,9 +67,8 @@ import com.android.systemui.statusbar.policy.CaffeineController;
 import com.android.systemui.statusbar.policy.NotificationSuppressController;
 import com.android.systemui.util.IconFetcher;
 import com.android.systemui.util.MediaSessionManagerHelper;
-import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class OnGoingActionProgressController
@@ -125,7 +125,7 @@ public class OnGoingActionProgressController
   private final HeadsUpManager mHeadsUpManager;
   private final IconFetcher mIconFetcher;
   private final MediaSessionManagerHelper mMediaSessionHelper;
-  private final Executor mBackgroundExecutor;
+  private final ExecutorService mBackgroundExecutor;
   private final FlashlightController mFlashlightController;
   private final HotspotController mHotspotController;
   private final ZenModeController mZenModeController;
@@ -145,7 +145,7 @@ public class OnGoingActionProgressController
   private final ImageView mIconView;
   private final ImageView mCompactIconView;
 
-  private final HashMap<String, IconFetcher.AdaptiveDrawableResult> mIconCache = new HashMap<>();
+  private final LruCache<String, IconFetcher.AdaptiveDrawableResult> mIconCache = new LruCache<>(15);
 
   private boolean mShowMediaProgress = true;
   private boolean mIsTrackingProgress = false;
@@ -218,6 +218,13 @@ public class OnGoingActionProgressController
 
   private CaffeineController.CaffeineStateListener mCaffeineListener;
   private NotificationSuppressController.StateListener mNotifSuppressListener;
+
+  private final BroadcastReceiver mRingerReceiver = new BroadcastReceiver() {
+      @Override
+      public void onReceive(Context context, Intent intent) {
+          updateStateHistory(TYPE_SILENT, mAudioManager.getRingerModeInternal() == AudioManager.RINGER_MODE_SILENT);
+      }
+  };
 
   private final Runnable mTransientGraceRunnable = () -> {
       mIsTransientGracePending = false;
@@ -427,12 +434,7 @@ public class OnGoingActionProgressController
         updateStateHistory(TYPE_NOTIF_SUPPRESS, mNotifSuppressController.isSuppressed());
     }
 
-    mBroadcastDispatcher.registerReceiver(new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            updateStateHistory(TYPE_SILENT, mAudioManager.getRingerModeInternal() == AudioManager.RINGER_MODE_SILENT);
-        }
-    }, new IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION));
+    mBroadcastDispatcher.registerReceiver(mRingerReceiver, new IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION));
 
     mProgressBar = progressGroup.progressBarView;
     mCircularProgressBar = progressGroup.circularProgressBarView;
@@ -1024,7 +1026,7 @@ public class OnGoingActionProgressController
   private void loadIconInBackground(String packageName, IconCallback callback) {
     if (packageName == null) return;
 
-    if (mIconCache.containsKey(packageName)) {
+    if (mIconCache.get(packageName) != null) {
       IconFetcher.AdaptiveDrawableResult cachedResult = mIconCache.get(packageName);
       if (cachedResult != null) {
         callback.onIconLoaded(cachedResult);
@@ -1745,9 +1747,13 @@ public class OnGoingActionProgressController
     mHandler.removeCallbacks(mAlarmCheckRunnable);
     mHandler.removeCallbacks(mTransientBufferRunnable);
     mHandler.removeCallbacks(mFinishAnimRunnable);
+    mHandler.removeCallbacks(mCompactCollapseRunnable);
+    mHandler.removeCallbacks(mMenuCollapseRunnable);
+
+    mBroadcastDispatcher.unregisterReceiver(mRingerReceiver);
 
     mSettingsObserver.unregister();
-    
+
     if (mDarkIconDispatcher != null) {
         mDarkIconDispatcher.removeDarkReceiver(mDarkReceiver);
     }
@@ -1778,11 +1784,18 @@ public class OnGoingActionProgressController
         mNotifSuppressController.removeListener(mNotifSuppressListener);
     }
 
+    if (mNotificationListener != null) {
+        mNotificationListener.removeNotificationHandler(this);
+    }
+
+    if (mBackgroundExecutor != null) {
+        mBackgroundExecutor.shutdownNow();
+    }
+
     mHeadsUpManager.removeListener(this);
     mMediaSessionHelper.removeMediaMetadataListener(mMediaMetadataListener);
 
     mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
-    mHandler.removeCallbacksAndMessages(null);
 
     if (mMediaPopup != null && mMediaPopup.isShowing()) {
       mMediaPopup.dismiss();
@@ -1792,7 +1805,7 @@ public class OnGoingActionProgressController
     mTrackedNotificationKey = null;
     mTrackedPackageName = null;
 
-    mIconCache.clear();
+    mIconCache.evictAll();
 
     if (!mIsComposeMode && mIconView != null) {
       mIconView.setImageDrawable(null);

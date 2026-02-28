@@ -22,6 +22,7 @@ import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -32,6 +33,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -129,23 +132,9 @@ fun OngoingActionProgress(
                 0f
             }
 
-            val progressColor = remember(rawAccentColor, progressValue) {
-                val hsv = FloatArray(3)
-                android.graphics.Color.colorToHSV(rawAccentColor.toArgb(), hsv)
-                hsv[1] = (hsv[1] * 0.65f).coerceIn(0f, 1f)
-                val brightnessFactor = 0.85f + (0.15f * progressValue)
-                hsv[2] = (hsv[2] * brightnessFactor).coerceIn(0f, 1f)
-                val mutedAccent = Color(android.graphics.Color.HSVToColor(hsv))
-                Color.White.copy(alpha = 0.1f).compositeOver(mutedAccent)
-            }
-
-            val activeStateColor = remember(rawAccentColor) {
-                val hsv = FloatArray(3)
-                android.graphics.Color.colorToHSV(rawAccentColor.toArgb(), hsv)
-                hsv[1] = (hsv[1] * 0.65f).coerceIn(0f, 1f)
-                val mutedAccent = Color(android.graphics.Color.HSVToColor(hsv))
-                Color.White.copy(alpha = 0.1f).compositeOver(mutedAccent)
-            }
+            val statusColor = Color(state.iconTint)
+            val dimmedStatusColor = statusColor.copy(alpha = 0.75f)
+            val progressColor = statusColor
 
             val scope = rememberCoroutineScope()
             var isPressed by remember { mutableStateOf(false) }
@@ -177,6 +166,9 @@ fun OngoingActionProgress(
                     scaleX = scale
                     scaleY = scale
                 }
+                .animateContentSize(
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
+                )
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragStart = { dragOffset = 0f },
@@ -204,8 +196,18 @@ fun OngoingActionProgress(
             AnimatedContent(
                 targetState = state.activeStateType,
                 transitionSpec = {
-                    (fadeIn(tween(120, delayMillis = 120)) togetherWith fadeOut(tween(120)))
-                        .using(SizeTransform(clip = false))
+                    val morphSpring = spring<Float>(
+                        dampingRatio = 0.7f,
+                        stiffness = 400f
+                    )
+                    (
+                        (fadeIn(morphSpring) + scaleIn(initialScale = 0.4f, animationSpec = morphSpring) + 
+                            slideInVertically(animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f), initialOffsetY = { it / 2 })) togetherWith 
+                        (fadeOut(tween(150)) + scaleOut(targetScale = 0.6f, animationSpec = morphSpring) + 
+                            slideOutVertically(animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f), targetOffsetY = { -it / 2 }))
+                    ).using(SizeTransform(clip = false, sizeAnimationSpec = { _, _ -> 
+                        spring(dampingRatio = 0.7f, stiffness = 400f) 
+                    }))
                 },
                 label = "IndicatorTypeCrossfade"
             ) { currentType ->
@@ -218,25 +220,23 @@ fun OngoingActionProgress(
                         .clip(RoundedCornerShape(15.dp))
 
                     if (currentType == OnGoingActionProgressController.TYPE_DONE_CHECKMARK) {
+                        val checkmarkPath = remember { Path() }
                         Box(
-                            modifier = circleModifier.background(secondaryContainer),
+                            modifier = circleModifier,
                             contentAlignment = Alignment.Center,
                         ) {
                             Canvas(modifier = Modifier.size(12.dp)) {
-                                val path = Path().apply {
-                                    moveTo(size.width * 0.15f, size.height * 0.5f)
-                                    lineTo(size.width * 0.4f, size.height * 0.75f)
-                                    lineTo(size.width * 0.85f, size.height * 0.25f)
-                                }
-                                drawPath(path, color = activeStateColor, style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                                checkmarkPath.reset()
+                                checkmarkPath.moveTo(size.width * 0.15f, size.height * 0.5f)
+                                checkmarkPath.lineTo(size.width * 0.4f, size.height * 0.75f)
+                                checkmarkPath.lineTo(size.width * 0.85f, size.height * 0.25f)
+                                drawPath(checkmarkPath, color = statusColor, style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                             }
                         }
                     } else if (currentType == OnGoingActionProgressController.TYPE_LOGO) {
                         val iconTint = when {
-                            state.isCharging -> activeStateColor
-                            state.isPowerSave -> outlineColor
                             state.batteryLevel <= 15 -> errorColor.copy(alpha = 0.8f)
-                            else -> Color(state.iconTint)
+                            else -> statusColor
                         }
 
                         var hasSparked by rememberSaveable { mutableStateOf(false) }
@@ -273,7 +273,7 @@ fun OngoingActionProgress(
                                 Icon(
                                     painter = painterResource(id = com.android.systemui.res.R.drawable.ic_voltage_logo),
                                     contentDescription = null,
-                                    tint = Color.White.copy(alpha = sparkAlpha.value),
+                                    tint = rawAccentColor.copy(alpha = sparkAlpha.value),
                                     modifier = Modifier
                                         .size(20.dp)
                                         .graphicsLayer {
@@ -299,15 +299,23 @@ fun OngoingActionProgress(
                             else -> 0
                         }
 
+                        val currentIconTint = when (currentType) {
+                            OnGoingActionProgressController.TYPE_FLASHLIGHT,
+                            OnGoingActionProgressController.TYPE_HOTSPOT -> rawAccentColor
+                            OnGoingActionProgressController.TYPE_SAVER,
+                            OnGoingActionProgressController.TYPE_NIRVANA -> dimmedStatusColor
+                            else -> statusColor
+                        }
+
                         if (iconRes != 0) {
                             Box(
-                                modifier = circleModifier.background(secondaryContainer),
+                                modifier = circleModifier,
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     painter = painterResource(id = iconRes),
                                     contentDescription = "Active State",
-                                    tint = activeStateColor,
+                                    tint = currentIconTint,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -325,7 +333,7 @@ fun OngoingActionProgress(
                                 val arcSize = Size(diameter, diameter)
 
                                 drawArc(
-                                    color = onSurfaceVariant.copy(alpha = 0.2f),
+                                    color = statusColor.copy(alpha = 0.2f),
                                     startAngle = 0f,
                                     sweepAngle = 360f,
                                     useCenter = false,
@@ -335,7 +343,7 @@ fun OngoingActionProgress(
                                 )
 
                                 drawArc(
-                                    color = progressColor,
+                                    color = statusColor,
                                     startAngle = -90f,
                                     sweepAngle = 360f * progressValue,
                                     useCenter = false,
@@ -346,16 +354,16 @@ fun OngoingActionProgress(
                             }
 
                             AnimatedContent(
-                                targetState = displayedIcon,
+                                targetState = displayedIcon != null,
                                 transitionSpec = {
-                                    (fadeIn(tween(250)) + scaleIn(initialScale = 0.4f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
-                                    (fadeOut(tween(200)) + scaleOut(targetScale = 0.4f, animationSpec = tween(200)))
+                                    (fadeIn(tween(200)) + scaleIn(initialScale = 0.8f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
+                                    (fadeOut(tween(150)) + scaleOut(targetScale = 0.8f, animationSpec = tween(150)))
                                 },
-                                label = "CompactAppIconMorph"
-                            ) { targetIcon ->
-                                if (targetIcon != null) {
+                                label = "CompactAppIconPresence"
+                            ) { hasIcon ->
+                                if (hasIcon && displayedIcon != null) {
                                     Image(
-                                        bitmap = targetIcon,
+                                        bitmap = displayedIcon!!,
                                         contentDescription = "App icon",
                                         modifier = Modifier.size(18.dp).clip(RoundedCornerShape(18.dp)),
                                         colorFilter = null,
@@ -378,17 +386,17 @@ fun OngoingActionProgress(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AnimatedContent(
-                            targetState = displayedIcon,
+                            targetState = displayedIcon != null,
                             transitionSpec = {
-                                (fadeIn(tween(250)) + scaleIn(initialScale = 0.4f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
-                                (fadeOut(tween(200)) + scaleOut(targetScale = 0.4f, animationSpec = tween(200)))
+                                (fadeIn(tween(200)) + scaleIn(initialScale = 0.8f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
+                                (fadeOut(tween(150)) + scaleOut(targetScale = 0.8f, animationSpec = tween(150)))
                             },
-                            label = "ExpandedAppIconMorph"
-                        ) { targetIcon ->
-                            if (targetIcon != null) {
+                            label = "ExpandedAppIconPresence"
+                        ) { hasIcon ->
+                            if (hasIcon && displayedIcon != null) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Image(
-                                        bitmap = targetIcon,
+                                        bitmap = displayedIcon!!,
                                         contentDescription = "App icon",
                                         modifier = Modifier
                                             .size(20.dp)
@@ -405,7 +413,7 @@ fun OngoingActionProgress(
                                 .weight(1f)
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp))
-                                .background(onSurfaceVariant.copy(alpha = 0.2f)),
+                                .background(statusColor.copy(alpha = 0.2f)),
                         ) {
                             if (progressValue > 0f) {
                                 Box(
@@ -413,7 +421,7 @@ fun OngoingActionProgress(
                                         .fillMaxHeight()
                                         .fillMaxWidth(progressValue)
                                         .clip(RoundedCornerShape(3.dp))
-                                        .background(progressColor),
+                                        .background(statusColor),
                                 )
                             }
                         }
@@ -438,14 +446,14 @@ fun OngoingActionProgress(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(modifier = Modifier.size(32.dp).clickable { controller.onMediaAction(0) }, contentAlignment = Alignment.Center) {
+                            val playPath1 = remember { Path() }
                             Canvas(modifier = Modifier.size(12.dp)) {
-                                val path = Path().apply {
-                                    moveTo(size.width, 0f)
-                                    lineTo(0f, size.height / 2)
-                                    lineTo(size.width, size.height)
-                                    close()
-                                }
-                                drawPath(path, Color.White, style = Fill)
+                                playPath1.reset()
+                                playPath1.moveTo(size.width, 0f)
+                                playPath1.lineTo(0f, size.height / 2f)
+                                playPath1.lineTo(size.width, size.height)
+                                playPath1.close()
+                                drawPath(playPath1, Color.White, style = Fill)
                                 drawRect(Color.White, topLeft = Offset(0f, 0f), size = Size(2.dp.toPx(), size.height))
                             }
                         }
@@ -457,14 +465,14 @@ fun OngoingActionProgress(
                         }
 
                         Box(modifier = Modifier.size(32.dp).clickable { controller.onMediaAction(2) }, contentAlignment = Alignment.Center) {
+                            val playPath2 = remember { Path() }
                             Canvas(modifier = Modifier.size(12.dp)) {
-                                val path = Path().apply {
-                                    moveTo(0f, 0f)
-                                    lineTo(size.width, size.height / 2)
-                                    lineTo(0f, size.height)
-                                    close()
-                                }
-                                drawPath(path, Color.White, style = Fill)
+                                playPath2.reset()
+                                playPath2.moveTo(0f, 0f)
+                                playPath2.lineTo(size.width, size.height / 2f)
+                                playPath2.lineTo(0f, size.height)
+                                playPath2.close()
+                                drawPath(playPath2, Color.White, style = Fill)
                                 drawRect(Color.White, topLeft = Offset(size.width - 2.dp.toPx(), 0f), size = Size(2.dp.toPx(), size.height))
                             }
                         }
