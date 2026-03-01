@@ -24,10 +24,11 @@ public class MotionEngine implements SensorEventListener {
     private float mCurrentX = 0f;
     private float mCurrentY = 0f;
     
-    // Massive Parallax boundaries so the blobs physically float around the screen
-    private final float mMaxOffset = 70.0f;
+    // Max parallax increased, smoothing adjusted
+    private final float mMaxOffset = 50.0f;
     private final float mSmoothing = 0.08f; 
-    private static final long SLEEP_TIMEOUT_MS = 5000;
+    // Wait 10 seconds before sleeping to ensure you see the parallax
+    private static final long SLEEP_TIMEOUT_MS = 10000;
 
     public interface OffsetListener {
         void onOffsetChanged(float x, float y);
