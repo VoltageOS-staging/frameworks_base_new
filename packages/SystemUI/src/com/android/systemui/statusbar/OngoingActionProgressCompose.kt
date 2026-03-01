@@ -525,12 +525,9 @@ class OnGoingActionProgressComposeController(
     init {
         Log.d(TAG, "Initializing OnGoingActionProgressComposeController")
 
-        val dummyGroup = OnGoingActionProgressGroup(null, null, null, null, null, null)
-
         try {
             javaController = OnGoingActionProgressController(
                 context,
-                dummyGroup,
                 notificationListener,
                 keyguardStateController,
                 headsUpManager,
