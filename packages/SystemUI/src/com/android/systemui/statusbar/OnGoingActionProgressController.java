@@ -23,6 +23,8 @@ import android.content.IntentFilter;
 import android.content.BroadcastReceiver;
 import android.content.pm.PackageManager;
 import android.database.ContentObserver;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
@@ -39,7 +41,6 @@ import android.service.notification.StatusBarNotification;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 import android.util.Log;
-import android.util.LruCache;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.android.systemui.Dependency;
@@ -93,7 +94,7 @@ public class OnGoingActionProgressController
         boolean isVisible,
         int progress,
         int maxProgress,
-        Drawable icon,
+        Bitmap iconBitmap,
         boolean isIconAdaptive,
         String packageName,
         boolean isCompactMode,
@@ -108,10 +109,10 @@ public class OnGoingActionProgressController
 
   private static class IconResult {
     boolean isAdaptive;
-    Drawable drawable;
-    IconResult(boolean isAdaptive, Drawable drawable) {
+    Bitmap bitmap;
+    IconResult(boolean isAdaptive, Bitmap bitmap) {
       this.isAdaptive = isAdaptive;
-      this.drawable = drawable;
+      this.bitmap = bitmap;
     }
   }
 
@@ -135,8 +136,9 @@ public class OnGoingActionProgressController
   private final DarkIconDispatcher.DarkReceiver mDarkReceiver;
   private StateCallback mStateCallback = null;
 
-  private final LruCache<String, IconResult> mIconCache = new LruCache<>(15);
+  private final ConcurrentHashMap<String, IconResult> mIconCache = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Boolean> mInFlightIconLoads = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, StatusBarNotification> mActiveNotificationsCache = new ConcurrentHashMap<>();
 
   private boolean mShowMediaProgress = true;
   private boolean mIsTrackingProgress = false;
@@ -148,7 +150,7 @@ public class OnGoingActionProgressController
   private boolean mIsCompactModeEnabled = false;
   private int mCurrentProgress = 0;
   private int mCurrentProgressMax = 0;
-  private Drawable mCurrentIcon = null;
+  private Bitmap mCurrentIconBitmap = null;
   private boolean mCurrentIconIsAdaptive = false;
   private int mProgressBarOpacity = DEFAULT_OPACITY;
   private boolean mIsMenuVisible = false;
@@ -256,7 +258,7 @@ public class OnGoingActionProgressController
       new Runnable() {
         @Override
         public void run() {
-          if (mShowMediaProgress && mMediaSessionHelper.isMediaPlaying()) {
+          if (mShowMediaProgress && mMediaSessionHelper.isMediaPlaying() && !mIsForceHidden) {
             updateMediaProgressOnly();
             mMediaProgressHandler.postDelayed(this, MEDIA_UPDATE_INTERVAL_MS);
           }
@@ -426,6 +428,22 @@ public class OnGoingActionProgressController
     mIsViewAttached = true;
     updateSettings();
 
+    // Populate Initial Notification Cache
+    mBackgroundExecutor.execute(() -> {
+        try {
+            StatusBarNotification[] sbns = mNotificationListener.getActiveNotifications();
+            if (sbns != null) {
+                for (StatusBarNotification sbn : sbns) {
+                    if (sbn != null) {
+                        mActiveNotificationsCache.put(sbn.getKey(), sbn);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize notification cache", e);
+        }
+    });
+
     mHandler.postDelayed(mStaleProgressChecker, STALE_PROGRESS_CHECK_INTERVAL_MS);
   }
 
@@ -541,7 +559,7 @@ public class OnGoingActionProgressController
           true,
           mCurrentProgress,
           mCurrentProgressMax,
-          mCurrentIcon,
+          mCurrentIconBitmap,
           mCurrentIconIsAdaptive,
           mTrackedPackageName,
           isCompact,
@@ -614,6 +632,7 @@ public class OnGoingActionProgressController
 
     if (mIsCompactModeEnabled && !mIsExpanded) {
       if (!mIsEnabled && !isMediaPlaying) {
+        mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
         notifyStateCallback();
         return;
       }
@@ -632,6 +651,7 @@ public class OnGoingActionProgressController
           updateMediaProgressOnly();
         }
       } else {
+        mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
         updateNotificationProgress();
       }
     }
@@ -639,9 +659,7 @@ public class OnGoingActionProgressController
   }
 
   private void updateMediaProgressOnly() {
-    if (!mIsViewAttached) {
-      return;
-    }
+    if (!mIsViewAttached) return;
 
     long totalDuration = mMediaSessionHelper.getTotalDuration();
 
@@ -664,54 +682,76 @@ public class OnGoingActionProgressController
     if (!mIsViewAttached) return;
 
     mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
-    mMediaProgressHandler.post(mMediaProgressRunnable);
+    if (!mIsForceHidden) {
+        mMediaProgressHandler.post(mMediaProgressRunnable);
+    }
 
     Drawable mediaAppIcon = mMediaSessionHelper.getMediaAppIcon();
 
     if (mediaAppIcon != null) {
-      mCurrentIcon = mediaAppIcon;
-      mCurrentIconIsAdaptive = mediaAppIcon instanceof AdaptiveIconDrawable;
+      boolean isAdaptive = mediaAppIcon instanceof AdaptiveIconDrawable;
+      mBackgroundExecutor.execute(() -> {
+          Bitmap bmp = drawableToBitmap(mediaAppIcon);
+          mHandler.post(() -> {
+              mCurrentIconBitmap = bmp;
+              mCurrentIconIsAdaptive = isAdaptive;
+              updateMediaProgressOnly();
+          });
+      });
+      return;
+    }
+
+    String packageName = null;
+    android.media.session.PlaybackState playbackState = mMediaSessionHelper.getMediaControllerPlaybackState();
+    if (playbackState != null && playbackState.getExtras() != null) {
+      packageName = playbackState.getExtras().getString("package");
+    }
+
+    if (packageName != null) {
+      loadIconInBackground(
+          packageName,
+          result -> {
+            if (result != null && result.bitmap != null) {
+              mCurrentIconBitmap = result.bitmap;
+              mCurrentIconIsAdaptive = result.isAdaptive;
+            } else {
+              setDefaultMediaIcon();
+            }
+            notifyStateCallback();
+          });
     } else {
-      String packageName = null;
-
-      android.media.session.PlaybackState playbackState =
-          mMediaSessionHelper.getMediaControllerPlaybackState();
-      if (playbackState != null && playbackState.getExtras() != null) {
-        packageName = playbackState.getExtras().getString("package");
-      }
-      if (packageName != null) {
-        loadIconInBackground(
-            packageName,
-            result -> {
-              Drawable drawable = result != null ? result.drawable : null;
-              boolean isAdaptive = result != null ? result.isAdaptive : false;
-
-              if (drawable != null) {
-                mCurrentIcon = drawable;
-                mCurrentIconIsAdaptive = isAdaptive;
-              } else {
-                setDefaultMediaIcon();
-              }
-              notifyStateCallback();
-            });
-      } else {
-        setDefaultMediaIcon();
-      }
+      setDefaultMediaIcon();
     }
 
     updateMediaProgressOnly();
   }
 
+  private Bitmap mDefaultMediaBitmap = null;
   private void setDefaultMediaIcon() {
-    mCurrentIcon = mContext.getResources().getDrawable(R.drawable.ic_default_music_icon);
+    if (mDefaultMediaBitmap == null) {
+      mBackgroundExecutor.execute(() -> {
+          Drawable d = mContext.getResources().getDrawable(R.drawable.ic_default_music_icon, mContext.getTheme());
+          mDefaultMediaBitmap = drawableToBitmap(d);
+          mHandler.post(() -> applyDefaultMediaIcon());
+      });
+    } else {
+      applyDefaultMediaIcon();
+    }
+  }
+
+  private void applyDefaultMediaIcon() {
+    mCurrentIconBitmap = mDefaultMediaBitmap;
     mCurrentIconIsAdaptive = false;
+    notifyStateCallback();
   }
 
   private void updateMediaProgressCompact() {
     if (!mIsViewAttached) return;
 
     mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
-    mMediaProgressHandler.post(mMediaProgressRunnable);
+    if (!mIsForceHidden) {
+        mMediaProgressHandler.post(mMediaProgressRunnable);
+    }
 
     long totalDuration = mMediaSessionHelper.getTotalDuration();
 
@@ -730,38 +770,38 @@ public class OnGoingActionProgressController
     Drawable mediaAppIcon = mMediaSessionHelper.getMediaAppIcon();
 
     if (mediaAppIcon != null) {
-      mCurrentIcon = mediaAppIcon;
-      mCurrentIconIsAdaptive = mediaAppIcon instanceof AdaptiveIconDrawable;
-    } else {
-      String packageName = null;
-      if (playbackState != null && playbackState.getExtras() != null) {
-        packageName = playbackState.getExtras().getString("package");
-      }
-
-      if (packageName != null) {
-        loadIconInBackground(
-            packageName,
-            result -> {
-              Drawable drawable = result != null ? result.drawable : null;
-              boolean isAdaptive = result != null ? result.isAdaptive : false;
-
-              if (drawable != null) {
-                mCurrentIcon = drawable;
-                mCurrentIconIsAdaptive = isAdaptive;
-              } else {
-                setDefaultMediaIconCompact();
-              }
+      boolean isAdaptive = mediaAppIcon instanceof AdaptiveIconDrawable;
+      mBackgroundExecutor.execute(() -> {
+          Bitmap bmp = drawableToBitmap(mediaAppIcon);
+          mHandler.post(() -> {
+              mCurrentIconBitmap = bmp;
+              mCurrentIconIsAdaptive = isAdaptive;
               notifyStateCallback();
-            });
-      } else {
-        setDefaultMediaIconCompact();
-      }
+          });
+      });
+      return;
     }
-  }
 
-  private void setDefaultMediaIconCompact() {
-    mCurrentIcon = mContext.getResources().getDrawable(R.drawable.ic_default_music_icon);
-    mCurrentIconIsAdaptive = false;
+    String packageName = null;
+    if (playbackState != null && playbackState.getExtras() != null) {
+      packageName = playbackState.getExtras().getString("package");
+    }
+
+    if (packageName != null) {
+      loadIconInBackground(
+          packageName,
+          result -> {
+            if (result != null && result.bitmap != null) {
+              mCurrentIconBitmap = result.bitmap;
+              mCurrentIconIsAdaptive = result.isAdaptive;
+            } else {
+              setDefaultMediaIcon();
+            }
+            notifyStateCallback();
+          });
+    } else {
+      setDefaultMediaIcon();
+    }
   }
 
   private void updateNotificationProgress() {
@@ -781,59 +821,45 @@ public class OnGoingActionProgressController
       loadIconInBackground(
           mTrackedPackageName,
           result -> {
-            Drawable drawable = result != null ? result.drawable : null;
-            boolean isAdaptive = result != null ? result.isAdaptive : false;
-
-            mCurrentIcon = drawable;
-            mCurrentIconIsAdaptive = isAdaptive;
+            if (result != null && result.bitmap != null) {
+                mCurrentIconBitmap = result.bitmap;
+                mCurrentIconIsAdaptive = result.isAdaptive;
+            }
             notifyStateCallback();
           });
     }
   }
 
   private void updateNotificationProgressCompact() {
-    if (!mIsViewAttached) return;
+    updateNotificationProgress();
+  }
 
-    if (!mIsEnabled || !mIsTrackingProgress) {
-      mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
-      return;
-    }
-
-    if (mCurrentProgressMax <= 0) {
-      Log.w(TAG, "updateViews: invalid max progress " + mCurrentProgressMax + ", using 100");
-      mCurrentProgressMax = 100;
-    }
-
-    if (mTrackedPackageName != null) {
-      loadIconInBackground(
-          mTrackedPackageName,
-          result -> {
-            Drawable drawable = result != null ? result.drawable : null;
-            boolean isAdaptive = result != null ? result.isAdaptive : false;
-
-            mCurrentIcon = drawable;
-            mCurrentIconIsAdaptive = isAdaptive;
-            notifyStateCallback();
-          });
-    }
+  private Bitmap drawableToBitmap(Drawable drawable) {
+      if (drawable == null) return null;
+      int sizePx = (int) (24 * mContext.getResources().getDisplayMetrics().density);
+      Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+      Canvas canvas = new Canvas(bitmap);
+      drawable.setBounds(0, 0, sizePx, sizePx);
+      drawable.draw(canvas);
+      return bitmap;
   }
 
   private IconResult fetchPackageIcon(String packageName) {
       try {
           PackageManager packageManager = mContext.getPackageManager();
           Drawable icon = packageManager.getApplicationIcon(packageName);
-          return new IconResult(icon instanceof AdaptiveIconDrawable, icon);
+          return new IconResult(icon instanceof AdaptiveIconDrawable, drawableToBitmap(icon));
       } catch (PackageManager.NameNotFoundException e) {
           Log.w(TAG, "Failed to load icon for " + packageName, e);
           Drawable defaultIcon = mContext.getDrawable(android.R.drawable.sym_def_app_icon);
-          return new IconResult(false, defaultIcon);
+          return new IconResult(false, drawableToBitmap(defaultIcon));
       }
   }
 
   private void loadIconInBackground(String packageName, IconCallback callback) {
     if (packageName == null) return;
 
-    if (mIconCache.get(packageName) != null) {
+    if (mIconCache.containsKey(packageName)) {
       IconResult cachedResult = mIconCache.get(packageName);
       if (cachedResult != null) {
         callback.onIconLoaded(cachedResult);
@@ -850,10 +876,7 @@ public class OnGoingActionProgressController
         () -> {
           final IconResult iconResult = fetchPackageIcon(packageName);
 
-          if (iconResult.drawable != null) {
-            int sizePx = (int) (24 * mContext.getResources().getDisplayMetrics().density);
-            iconResult.drawable.setBounds(0, 0, sizePx, sizePx);
-
+          if (iconResult.bitmap != null) {
             mHandler.post(
                 () -> {
                   mIconCache.put(packageName, iconResult);
@@ -915,7 +938,7 @@ public class OnGoingActionProgressController
   private void checkForStaleProgress() {
     if (!mIsTrackingProgress || mTrackedNotificationKey == null) return;
 
-    StatusBarNotification sbn = findNotificationByKey(mTrackedNotificationKey);
+    StatusBarNotification sbn = mActiveNotificationsCache.get(mTrackedNotificationKey);
     if (sbn == null) {
         clearProgressTracking(false);
       return;
@@ -953,18 +976,6 @@ public class OnGoingActionProgressController
     }
   }
 
-  @Nullable
-  private StatusBarNotification findNotificationByKey(String key) {
-    if (key == null || mNotificationListener == null) return null;
-
-    for (StatusBarNotification notification : mNotificationListener.getActiveNotifications()) {
-      if (notification.getKey().equals(key)) {
-        return notification;
-      }
-    }
-    return null;
-  }
-
   private static boolean hasProgress(@NonNull final Notification notification) {
     Bundle extras = notification.extras;
     if (extras == null) return false;
@@ -980,7 +991,7 @@ public class OnGoingActionProgressController
   private void cancelTrackedTask() {
       if (mTrackedNotificationKey != null && mNotificationListener != null) {
           try {
-              for (StatusBarNotification sbn : mNotificationListener.getActiveNotifications()) {
+              for (StatusBarNotification sbn : mActiveNotificationsCache.values()) {
                   if (sbn.getKey().equals(mTrackedNotificationKey)) {
                       Notification n = sbn.getNotification();
                       if (n.actions != null) {
@@ -1050,7 +1061,7 @@ public class OnGoingActionProgressController
       if (mNextAlarm != null && mNextAlarm.getShowIntent() != null) {
           String alarmPackage = mNextAlarm.getShowIntent().getCreatorPackage();
           if (mNotificationListener != null && alarmPackage != null) {
-              for (StatusBarNotification sbn : mNotificationListener.getActiveNotifications()) {
+              for (StatusBarNotification sbn : mActiveNotificationsCache.values()) {
                   if (alarmPackage.equals(sbn.getPackageName())) {
                       Notification n = sbn.getNotification();
                       if (n.actions != null) {
@@ -1140,12 +1151,7 @@ public class OnGoingActionProgressController
     }
 
     if (mShowMediaProgress && mMediaSessionHelper.isMediaPlaying()) {
-      mIsMenuVisible = !mIsMenuVisible;
-      notifyStateCallback();
-      if (mIsMenuVisible) {
-          mHandler.removeCallbacks(mMenuCollapseRunnable);
-          mHandler.postDelayed(mMenuCollapseRunnable, 5000);
-      }
+      openMediaApp();
     } else {
       openTrackedApp();
     }
@@ -1155,6 +1161,7 @@ public class OnGoingActionProgressController
   public void onLongPress() {
     switch(mCurrentDisplayState) {
         case TYPE_TRANSIENT:
+            // LONG PRESS: Toggle Play/Pause or Cancel Task
             if (mShowMediaProgress && mMediaSessionHelper.isMediaPlaying()) {
                 toggleMediaPlaybackState();
             } else {
@@ -1258,6 +1265,8 @@ public class OnGoingActionProgressController
 
     Notification notification = sbn.getNotification();
     if (notification == null) return;
+    
+    mActiveNotificationsCache.put(sbn.getKey(), sbn);
 
     mHandler.post(() -> {
       boolean hasValidProgress = hasProgress(notification);
@@ -1268,7 +1277,7 @@ public class OnGoingActionProgressController
                 final String key = sbn.getKey();
                 mHandler.postDelayed(() -> {
                     if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
-                        StatusBarNotification currentSbn = findNotificationByKey(key);
+                        StatusBarNotification currentSbn = mActiveNotificationsCache.get(key);
                         if (currentSbn == null || !hasProgress(currentSbn.getNotification())) {
                             clearProgressTracking(true);
                         }
@@ -1288,6 +1297,8 @@ public class OnGoingActionProgressController
 
   private void onNotificationRemoved(final StatusBarNotification sbn) {
     if (sbn == null) return;
+    
+    mActiveNotificationsCache.remove(sbn.getKey());
 
     mHandler.post(() -> {
       if (!mIsTrackingProgress) return;
@@ -1296,7 +1307,7 @@ public class OnGoingActionProgressController
               final String key = sbn.getKey();
               mHandler.postDelayed(() -> {
                   if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
-                      if (findNotificationByKey(key) == null) {
+                      if (mActiveNotificationsCache.get(key) == null) {
                           clearProgressTracking(true);
                       }
                   }
@@ -1308,7 +1319,7 @@ public class OnGoingActionProgressController
               final String key = mTrackedNotificationKey;
               mHandler.postDelayed(() -> {
                   if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
-                      StatusBarNotification currentSbn = findNotificationByKey(key);
+                      StatusBarNotification currentSbn = mActiveNotificationsCache.get(key);
                       if (currentSbn == null || !hasProgress(currentSbn.getNotification())) {
                           clearProgressTracking(true);
                       }
@@ -1324,6 +1335,11 @@ public class OnGoingActionProgressController
       mIsForceHidden = forceHidden;
       notifyStateCallback();
       requestUiUpdate();
+      
+      if (!mIsForceHidden && mShowMediaProgress && mMediaSessionHelper != null && mMediaSessionHelper.isMediaPlaying()) {
+          mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
+          mMediaProgressHandler.post(mMediaProgressRunnable);
+      }
     }
   }
 
@@ -1540,8 +1556,9 @@ public class OnGoingActionProgressController
     mTrackedPackageName = null;
 
     mInFlightIconLoads.clear();
-    mIconCache.evictAll();
+    mActiveNotificationsCache.clear();
+    mIconCache.clear();
 
-    mCurrentIcon = null;
+    mCurrentIconBitmap = null;
   }
 }
