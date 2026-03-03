@@ -21,6 +21,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.BroadcastReceiver;
+import android.content.pm.PackageManager;
 import android.database.ContentObserver;
 import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.Drawable;
@@ -55,9 +56,10 @@ import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.NextAlarmController;
 import com.android.systemui.statusbar.policy.CaffeineController;
 import com.android.systemui.statusbar.policy.NotificationSuppressController;
-import com.android.systemui.util.IconFetcher;
 import com.android.systemui.util.MediaSessionManagerHelper;
+
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -104,6 +106,15 @@ public class OnGoingActionProgressController
         int iconTint);
   }
 
+  private static class IconResult {
+    boolean isAdaptive;
+    Drawable drawable;
+    IconResult(boolean isAdaptive, Drawable drawable) {
+      this.isAdaptive = isAdaptive;
+      this.drawable = drawable;
+    }
+  }
+
   private final Context mContext;
   private final ContentResolver mContentResolver;
   private final Handler mHandler;
@@ -111,7 +122,6 @@ public class OnGoingActionProgressController
   private final KeyguardStateController mKeyguardStateController;
   private final NotificationListener mNotificationListener;
   private final HeadsUpManager mHeadsUpManager;
-  private final IconFetcher mIconFetcher;
   private final MediaSessionManagerHelper mMediaSessionHelper;
   private final ExecutorService mBackgroundExecutor;
   private final FlashlightController mFlashlightController;
@@ -125,7 +135,8 @@ public class OnGoingActionProgressController
   private final DarkIconDispatcher.DarkReceiver mDarkReceiver;
   private StateCallback mStateCallback = null;
 
-  private final LruCache<String, IconFetcher.AdaptiveDrawableResult> mIconCache = new LruCache<>(15);
+  private final LruCache<String, IconResult> mIconCache = new LruCache<>(15);
+  private final ConcurrentHashMap<String, Boolean> mInFlightIconLoads = new ConcurrentHashMap<>();
 
   private boolean mShowMediaProgress = true;
   private boolean mIsTrackingProgress = false;
@@ -256,9 +267,7 @@ public class OnGoingActionProgressController
       new Runnable() {
         @Override
         public void run() {
-          synchronized (OnGoingActionProgressController.this) {
-            checkForStaleProgress();
-          }
+          checkForStaleProgress();
           if (mIsViewAttached) {
             mHandler.postDelayed(this, STALE_PROGRESS_CHECK_INTERVAL_MS);
           }
@@ -405,7 +414,6 @@ public class OnGoingActionProgressController
 
     mBroadcastDispatcher.registerReceiver(mRingerReceiver, new IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION));
 
-    mIconFetcher = new IconFetcher(context);
     mMediaSessionHelper = MediaSessionManagerHelper.Companion.getInstance(context);
 
     mKeyguardStateController.addCallback(this);
@@ -810,38 +818,56 @@ public class OnGoingActionProgressController
     }
   }
 
+  private IconResult fetchPackageIcon(String packageName) {
+      try {
+          PackageManager packageManager = mContext.getPackageManager();
+          Drawable icon = packageManager.getApplicationIcon(packageName);
+          return new IconResult(icon instanceof AdaptiveIconDrawable, icon);
+      } catch (PackageManager.NameNotFoundException e) {
+          Log.w(TAG, "Failed to load icon for " + packageName, e);
+          Drawable defaultIcon = mContext.getDrawable(android.R.drawable.sym_def_app_icon);
+          return new IconResult(false, defaultIcon);
+      }
+  }
+
   private void loadIconInBackground(String packageName, IconCallback callback) {
     if (packageName == null) return;
 
     if (mIconCache.get(packageName) != null) {
-      IconFetcher.AdaptiveDrawableResult cachedResult = mIconCache.get(packageName);
+      IconResult cachedResult = mIconCache.get(packageName);
       if (cachedResult != null) {
         callback.onIconLoaded(cachedResult);
         return;
       }
     }
 
+    if (mInFlightIconLoads.containsKey(packageName)) {
+      return;
+    }
+    mInFlightIconLoads.put(packageName, true);
+
     mBackgroundExecutor.execute(
         () -> {
-          final IconFetcher.AdaptiveDrawableResult iconResult =
-              mIconFetcher.getMonotonicPackageIcon(packageName);
+          final IconResult iconResult = fetchPackageIcon(packageName);
 
-          if (iconResult != null && iconResult.drawable != null) {
+          if (iconResult.drawable != null) {
             int sizePx = (int) (24 * mContext.getResources().getDisplayMetrics().density);
             iconResult.drawable.setBounds(0, 0, sizePx, sizePx);
 
-            mIconCache.put(packageName, iconResult);
-
             mHandler.post(
                 () -> {
+                  mIconCache.put(packageName, iconResult);
+                  mInFlightIconLoads.remove(packageName);
                   callback.onIconLoaded(iconResult);
                 });
+          } else {
+              mHandler.post(() -> mInFlightIconLoads.remove(packageName));
           }
         });
   }
 
   private interface IconCallback {
-    void onIconLoaded(@Nullable IconFetcher.AdaptiveDrawableResult result);
+    void onIconLoaded(@Nullable IconResult result);
   }
 
   private void extractProgress(Notification notification) {
@@ -1233,7 +1259,7 @@ public class OnGoingActionProgressController
     Notification notification = sbn.getNotification();
     if (notification == null) return;
 
-    synchronized (this) {
+    mHandler.post(() -> {
       boolean hasValidProgress = hasProgress(notification);
       String currentKey = mTrackedNotificationKey;
 
@@ -1241,12 +1267,10 @@ public class OnGoingActionProgressController
         if (currentKey != null && currentKey.equals(sbn.getKey())) {
                 final String key = sbn.getKey();
                 mHandler.postDelayed(() -> {
-                    synchronized (OnGoingActionProgressController.this) {
-                        if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
-                            StatusBarNotification currentSbn = findNotificationByKey(key);
-                            if (currentSbn == null || !hasProgress(currentSbn.getNotification())) {
-                                clearProgressTracking(true);
-                            }
+                    if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
+                        StatusBarNotification currentSbn = findNotificationByKey(key);
+                        if (currentSbn == null || !hasProgress(currentSbn.getNotification())) {
+                            clearProgressTracking(true);
                         }
                     }
                 }, 500);
@@ -1259,23 +1283,21 @@ public class OnGoingActionProgressController
       } else if (sbn.getKey().equals(currentKey)) {
         updateProgressIfNeeded(sbn);
       }
-    }
+    });
   }
 
   private void onNotificationRemoved(final StatusBarNotification sbn) {
     if (sbn == null) return;
 
-    synchronized (this) {
+    mHandler.post(() -> {
       if (!mIsTrackingProgress) return;
 
       if (sbn.getKey().equals(mTrackedNotificationKey)) {
               final String key = sbn.getKey();
               mHandler.postDelayed(() -> {
-                  synchronized (OnGoingActionProgressController.this) {
-                      if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
-                          if (findNotificationByKey(key) == null) {
-                              clearProgressTracking(true);
-                          }
+                  if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
+                      if (findNotificationByKey(key) == null) {
+                          clearProgressTracking(true);
                       }
                   }
               }, 500);
@@ -1285,17 +1307,15 @@ public class OnGoingActionProgressController
       if (sbn.getPackageName().equals(mTrackedPackageName)) {
               final String key = mTrackedNotificationKey;
               mHandler.postDelayed(() -> {
-                  synchronized (OnGoingActionProgressController.this) {
-                      if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
-                          StatusBarNotification currentSbn = findNotificationByKey(key);
-                          if (currentSbn == null || !hasProgress(currentSbn.getNotification())) {
-                              clearProgressTracking(true);
-                          }
+                  if (mTrackedNotificationKey != null && mTrackedNotificationKey.equals(key)) {
+                      StatusBarNotification currentSbn = findNotificationByKey(key);
+                      if (currentSbn == null || !hasProgress(currentSbn.getNotification())) {
+                          clearProgressTracking(true);
                       }
                   }
               }, 500);
       }
-    }
+    });
   }
 
   public void setForceHidden(final boolean forceHidden) {
@@ -1468,13 +1488,7 @@ public class OnGoingActionProgressController
   public void destroy() {
     mIsViewAttached = false;
 
-    mHandler.removeCallbacks(mStaleProgressChecker);
-    mHandler.removeCallbacks(mTransientGraceRunnable);
-    mHandler.removeCallbacks(mAlarmCheckRunnable);
-    mHandler.removeCallbacks(mTransientBufferRunnable);
-    mHandler.removeCallbacks(mFinishAnimRunnable);
-    mHandler.removeCallbacks(mCompactCollapseRunnable);
-    mHandler.removeCallbacks(mMenuCollapseRunnable);
+    mHandler.removeCallbacksAndMessages(null);
 
     mBroadcastDispatcher.unregisterReceiver(mRingerReceiver);
 
@@ -1521,12 +1535,11 @@ public class OnGoingActionProgressController
     mHeadsUpManager.removeListener(this);
     mMediaSessionHelper.removeMediaMetadataListener(mMediaMetadataListener);
 
-    mMediaProgressHandler.removeCallbacks(mMediaProgressRunnable);
-
     mIsTrackingProgress = false;
     mTrackedNotificationKey = null;
     mTrackedPackageName = null;
 
+    mInFlightIconLoads.clear();
     mIconCache.evictAll();
 
     mCurrentIcon = null;
