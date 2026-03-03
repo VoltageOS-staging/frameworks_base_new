@@ -21,9 +21,14 @@ import static android.app.WallpaperManager.FLAG_SYSTEM;
 import static android.app.WallpaperManager.SetWallpaperFlags;
 
 import android.annotation.Nullable;
+import android.app.KeyguardManager;
 import android.app.WallpaperColors;
 import android.app.WallpaperManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.database.ContentObserver;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.RecordingCanvas;
@@ -32,10 +37,12 @@ import android.graphics.RectF;
 import android.graphics.Paint;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.DisplayManager.DisplayListener;
+import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.SystemProperties;
 import android.os.Trace;
+import android.provider.Settings;
 import android.service.wallpaper.WallpaperService;
 import android.util.Log;
 import android.view.Surface;
@@ -48,6 +55,8 @@ import com.android.systemui.dagger.qualifiers.LongRunning;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.utils.windowmanager.WindowManagerProvider;
+
+import com.android.systemui.wallpapers.haze.HazeRenderThread;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -142,6 +151,32 @@ public class ImageWallpaper extends WallpaperService {
          */
         private final Object mSurfaceLock = new Object();
 
+        // --- HAZE VARIABLES ---
+        private HazeRenderThread mHazeThread;
+        private boolean mIsHazeEnabled;
+        
+        private final ContentObserver mHazeObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+            @Override
+            public void onChange(boolean selfChange) {
+                updateHazeState();
+            }
+        };
+
+        private final BroadcastReceiver mStateReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (mHazeThread != null) {
+                    String action = intent.getAction();
+                    if (Intent.ACTION_USER_PRESENT.equals(action)) {
+                        mHazeThread.triggerTransition(2); // Unlocked to Homescreen
+                    } else if (Intent.ACTION_SCREEN_OFF.equals(action)) {
+                        mHazeThread.triggerTransition(0); // Screen Off
+                    }
+                }
+            }
+        };
+        // ----------------------
+
         CanvasEngine() {
             super();
             setFixedSizeAllowed(true);
@@ -201,8 +236,54 @@ public class ImageWallpaper extends WallpaperService {
             getDisplayContext().getSystemService(DisplayManager.class)
                     .registerDisplayListener(this, null);
             getDisplaySizeAndUpdateColorExtractor();
+
+            // --- HAZE REGISTRATION ---
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor("atmosphere_enabled"), false, mHazeObserver);
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor("atmosphere_style"), false, mHazeObserver);
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor("atmosphere_intensity"), false, mHazeObserver);
+
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_USER_PRESENT);
+            filter.addAction(Intent.ACTION_SCREEN_OFF);
+            getDisplayContext().registerReceiver(mStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+
+            updateHazeState();
+            // -------------------------
+
             Trace.endSection();
         }
+
+        private void updateHazeState() {
+            mIsHazeEnabled = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(), "atmosphere_enabled", 0) == 1;
+                    
+            if (mHazeThread != null) {
+                mHazeThread.updateSettings();
+                mHazeThread.requestRender();
+            } else if (mIsHazeEnabled && mBitmap != null && mSurfaceHolder != null) {
+                drawFrame(); // Re-trigger draw to spawn the Haze thread
+            }
+        }
+
+        // --- HAZE VISIBILITY OVERRIDE ---
+        @Override
+        public void onVisibilityChanged(boolean visible) {
+            super.onVisibilityChanged(visible);
+            if (mIsHazeEnabled && mHazeThread != null) {
+                if (visible) {
+                    // Wallpaper became visible (Power Button OR Double Tap to Wake)
+                    KeyguardManager km = getDisplayContext().getSystemService(KeyguardManager.class);
+                    boolean isLocked = km != null && km.isKeyguardLocked();
+                    mHazeThread.triggerTransition(isLocked ? 1 : 2);
+                }
+                // Do nothing when visible is false (like opening an app).
+                // ACTION_SCREEN_OFF receiver strictly handles the sleep state cleanly!
+            }
+        }
+        // ------------------------------------
 
         @Override
         public void onDestroy() {
@@ -212,6 +293,18 @@ public class ImageWallpaper extends WallpaperService {
                 if (displayManager != null) displayManager.unregisterDisplayListener(this);
             }
             mColorExtractor.cleanUp();
+
+            // --- HAZE CLEANUP ---
+            getDisplayContext().getContentResolver().unregisterContentObserver(mHazeObserver);
+            try {
+                getDisplayContext().unregisterReceiver(mStateReceiver);
+            } catch (Exception ignored) {}
+
+            if (mHazeThread != null) {
+                mHazeThread.quit();
+                mHazeThread = null;
+            }
+            // --------------------
         }
 
         @Override
@@ -239,6 +332,13 @@ public class ImageWallpaper extends WallpaperService {
             synchronized (mSurfaceLock) {
                 mSurfaceHolder = null;
             }
+
+            // --- HAZE CLEANUP ---
+            if (mHazeThread != null) {
+                mHazeThread.quit();
+                mHazeThread = null;
+            }
+            // --------------------
         }
 
         @Override
@@ -288,6 +388,28 @@ public class ImageWallpaper extends WallpaperService {
         @VisibleForTesting
         void drawFrameOnCanvas(Bitmap bitmap) {
             Trace.beginSection("ImageWallpaper.CanvasEngine#drawFrame");
+
+            // --- HAZE INTERCEPT ---
+            if (mIsHazeEnabled) {
+                if (mHazeThread == null && bitmap != null && mSurfaceHolder != null && mSurfaceHolder.getSurface().isValid()) {
+                    mHazeThread = new HazeRenderThread(getDisplayContext(), mSurfaceHolder, bitmap);
+                    mHazeThread.start();
+                    
+                    KeyguardManager km = getDisplayContext().getSystemService(KeyguardManager.class);
+                    boolean isLocked = km != null && km.isKeyguardLocked();
+                    mHazeThread.triggerTransition(isLocked ? 1 : 2); 
+                }
+                Trace.endSection();
+                return; // Early return entirely bypasses native ROM canvas blur/dim!
+            }
+            
+            // Clean up thread if feature was turned off
+            if (mHazeThread != null) {
+                mHazeThread.quit();
+                mHazeThread = null;
+            }
+            // ----------------------
+
             Surface surface = mSurfaceHolder.getSurface();
             Canvas canvas = null;
             try {
