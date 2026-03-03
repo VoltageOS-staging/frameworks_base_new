@@ -60,6 +60,7 @@ import com.android.systemui.statusbar.policy.NotificationSuppressController;
 import com.android.systemui.util.MediaSessionManagerHelper;
 
 import java.util.LinkedList;
+import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -116,6 +117,14 @@ public class OnGoingActionProgressController
     }
   }
 
+  private static class BoundedIconCache extends LinkedHashMap<String, IconResult> {
+      BoundedIconCache() { super(16, 0.75f, /* accessOrder= */ true); }
+      @Override
+      protected boolean removeEldestEntry(java.util.Map.Entry<String, IconResult> eldest) {
+          return size() > 15;
+      }
+  }
+
   private final Context mContext;
   private final ContentResolver mContentResolver;
   private final Handler mHandler;
@@ -136,7 +145,7 @@ public class OnGoingActionProgressController
   private final DarkIconDispatcher.DarkReceiver mDarkReceiver;
   private StateCallback mStateCallback = null;
 
-  private final ConcurrentHashMap<String, IconResult> mIconCache = new ConcurrentHashMap<>();
+  private final BoundedIconCache mIconCache = new BoundedIconCache();
   private final ConcurrentHashMap<String, Boolean> mInFlightIconLoads = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, StatusBarNotification> mActiveNotificationsCache = new ConcurrentHashMap<>();
 
@@ -428,7 +437,6 @@ public class OnGoingActionProgressController
     mIsViewAttached = true;
     updateSettings();
 
-    // Populate Initial Notification Cache
     mBackgroundExecutor.execute(() -> {
         try {
             StatusBarNotification[] sbns = mNotificationListener.getActiveNotifications();
@@ -726,13 +734,20 @@ public class OnGoingActionProgressController
     updateMediaProgressOnly();
   }
 
-  private Bitmap mDefaultMediaBitmap = null;
+  private Bitmap mDefaultMediaBitmapFull = null;
+  private Bitmap mDefaultMediaBitmapCompact = null;
   private void setDefaultMediaIcon() {
-    if (mDefaultMediaBitmap == null) {
+    boolean isCompact = mIsCompactModeEnabled && !mIsExpanded;
+    Bitmap cached = isCompact ? mDefaultMediaBitmapCompact : mDefaultMediaBitmapFull;
+    if (cached == null) {
       mBackgroundExecutor.execute(() -> {
           Drawable d = mContext.getResources().getDrawable(R.drawable.ic_default_music_icon, mContext.getTheme());
-          mDefaultMediaBitmap = drawableToBitmap(d);
-          mHandler.post(() -> applyDefaultMediaIcon());
+          Bitmap bmp = drawableToBitmap(d);
+          mHandler.post(() -> {
+              if (isCompact) mDefaultMediaBitmapCompact = bmp;
+              else mDefaultMediaBitmapFull = bmp;
+              applyDefaultMediaIcon();
+          });
       });
     } else {
       applyDefaultMediaIcon();
@@ -740,7 +755,9 @@ public class OnGoingActionProgressController
   }
 
   private void applyDefaultMediaIcon() {
-    mCurrentIconBitmap = mDefaultMediaBitmap;
+    mCurrentIconBitmap = (mIsCompactModeEnabled && !mIsExpanded)
+        ? mDefaultMediaBitmapCompact
+        : mDefaultMediaBitmapFull;
     mCurrentIconIsAdaptive = false;
     notifyStateCallback();
   }
@@ -836,7 +853,8 @@ public class OnGoingActionProgressController
 
   private Bitmap drawableToBitmap(Drawable drawable) {
       if (drawable == null) return null;
-      int sizePx = (int) (24 * mContext.getResources().getDisplayMetrics().density);
+      int iconSizeDp = (mIsCompactModeEnabled && !mIsExpanded) ? 18 : 20;
+      int sizePx = (int) (iconSizeDp * mContext.getResources().getDisplayMetrics().density);
       Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
       Canvas canvas = new Canvas(bitmap);
       drawable.setBounds(0, 0, sizePx, sizePx);
@@ -859,12 +877,14 @@ public class OnGoingActionProgressController
   private void loadIconInBackground(String packageName, IconCallback callback) {
     if (packageName == null) return;
 
-    if (mIconCache.containsKey(packageName)) {
-      IconResult cachedResult = mIconCache.get(packageName);
-      if (cachedResult != null) {
-        callback.onIconLoaded(cachedResult);
-        return;
-      }
+    synchronized (mIconCache) {
+        if (mIconCache.containsKey(packageName)) {
+            IconResult cachedResult = mIconCache.get(packageName);
+            if (cachedResult != null) {
+                callback.onIconLoaded(cachedResult);
+                return;
+            }
+        }
     }
 
     if (mInFlightIconLoads.containsKey(packageName)) {
@@ -879,7 +899,9 @@ public class OnGoingActionProgressController
           if (iconResult.bitmap != null) {
             mHandler.post(
                 () -> {
-                  mIconCache.put(packageName, iconResult);
+                  synchronized (mIconCache) {
+                      mIconCache.put(packageName, iconResult);
+                  }
                   mInFlightIconLoads.remove(packageName);
                   callback.onIconLoaded(iconResult);
                 });
@@ -1161,7 +1183,6 @@ public class OnGoingActionProgressController
   public void onLongPress() {
     switch(mCurrentDisplayState) {
         case TYPE_TRANSIENT:
-            // LONG PRESS: Toggle Play/Pause or Cancel Task
             if (mShowMediaProgress && mMediaSessionHelper.isMediaPlaying()) {
                 toggleMediaPlaybackState();
             } else {
@@ -1557,7 +1578,12 @@ public class OnGoingActionProgressController
 
     mInFlightIconLoads.clear();
     mActiveNotificationsCache.clear();
-    mIconCache.clear();
+    synchronized (mIconCache) {
+        mIconCache.clear();
+    }
+
+    mDefaultMediaBitmapFull = null;
+    mDefaultMediaBitmapCompact = null;
 
     mCurrentIconBitmap = null;
   }
