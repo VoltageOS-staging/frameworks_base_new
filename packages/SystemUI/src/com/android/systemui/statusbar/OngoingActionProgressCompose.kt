@@ -76,17 +76,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.systemui.broadcast.BroadcastDispatcher
 import com.android.systemui.statusbar.notification.headsup.HeadsUpManager
@@ -106,6 +104,64 @@ import kotlinx.coroutines.launch
 private const val TAG = "OngoingActionProgressCompose"
 
 @Composable
+fun ProgressRing(progress: Int, maxProgress: Int, statusColor: Color, modifier: Modifier = Modifier) {
+    val progressValue = if (maxProgress > 0) {
+        (progress.toFloat() / maxProgress.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    Canvas(modifier = modifier) {
+        val strokeWidthPx = 3.dp.toPx()
+        val diameter = size.minDimension - strokeWidthPx
+        val radius = diameter / 2
+        val topLeftOffset = center - Offset(radius, radius)
+        val arcSize = Size(diameter, diameter)
+
+        drawArc(
+            color = statusColor.copy(alpha = 0.2f),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = topLeftOffset,
+            size = arcSize,
+            style = Stroke(width = strokeWidthPx),
+        )
+
+        drawArc(
+            color = statusColor,
+            startAngle = -90f,
+            sweepAngle = 360f * progressValue,
+            useCenter = false,
+            topLeft = topLeftOffset,
+            size = arcSize,
+            style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round),
+        )
+    }
+}
+
+@Composable
+fun ProgressBar(progress: Int, maxProgress: Int, statusColor: Color, modifier: Modifier = Modifier) {
+    val progressValue = if (maxProgress > 0) {
+        (progress.toFloat() / maxProgress.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(1.dp))
+            .background(statusColor.copy(alpha = 0.18f)),
+    ) {
+        if (progressValue > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progressValue)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(statusColor.copy(alpha = 0.9f)),
+            )
+        }
+    }
+}
+
+@Composable
 fun OngoingActionProgress(
     controller: OnGoingActionProgressComposeController,
     modifier: Modifier = Modifier,
@@ -113,9 +169,6 @@ fun OngoingActionProgress(
     val state by controller.state.collectAsStateWithLifecycle()
 
     val rawAccentColor = MaterialTheme.colorScheme.primary
-    val secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
-    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    val outlineColor = MaterialTheme.colorScheme.outline
     val errorColor = MaterialTheme.colorScheme.error
 
     AnimatedVisibility(
@@ -127,19 +180,10 @@ fun OngoingActionProgress(
         Box(
             contentAlignment = Alignment.Center,
         ) {
-            val progressValue = if (state.maxProgress > 0) {
-                (state.progress.toFloat() / state.maxProgress.toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-
             val statusColor = Color(state.iconTint)
             val dimmedStatusColor = statusColor.copy(alpha = 0.75f)
-            val progressColor = statusColor
 
-            val scope = rememberCoroutineScope()
             var isPressed by remember { mutableStateOf(false) }
-
             var displayedIcon by remember { mutableStateOf(state.icon) }
             var lastIconChangeTime by remember { mutableLongStateOf(0L) }
 
@@ -247,14 +291,11 @@ fun OngoingActionProgress(
                         LaunchedEffect(Unit) {
                             if (!hasSparked) {
                                 delay(800)
-                                
                                 launch { sparkScale.animateTo(1.2f, tween(50)) }
                                 sparkAlpha.animateTo(1f, tween(50))
                                 sparkAlpha.animateTo(0f, tween(50))
-                                
                                 launch { sparkScale.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 400f)) }
                                 sparkAlpha.animateTo(1f, tween(40))
-                                
                                 sparkAlpha.animateTo(0f, tween(400))
                                 hasSparked = true
                             }
@@ -326,33 +367,12 @@ fun OngoingActionProgress(
                             modifier = circleModifier,
                             contentAlignment = Alignment.Center,
                         ) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                val strokeWidthPx = 3.dp.toPx()
-                                val diameter = size.minDimension - strokeWidthPx
-                                val radius = diameter / 2
-                                val topLeftOffset = center - Offset(radius, radius)
-                                val arcSize = Size(diameter, diameter)
-
-                                drawArc(
-                                    color = statusColor.copy(alpha = 0.2f),
-                                    startAngle = 0f,
-                                    sweepAngle = 360f,
-                                    useCenter = false,
-                                    topLeft = topLeftOffset,
-                                    size = arcSize,
-                                    style = Stroke(width = strokeWidthPx),
-                                )
-
-                                drawArc(
-                                    color = statusColor,
-                                    startAngle = -90f,
-                                    sweepAngle = 360f * progressValue,
-                                    useCenter = false,
-                                    topLeft = topLeftOffset,
-                                    size = arcSize,
-                                    style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round),
-                                )
-                            }
+                            ProgressRing(
+                                progress = state.progress,
+                                maxProgress = state.maxProgress,
+                                statusColor = statusColor,
+                                modifier = Modifier.fillMaxSize()
+                            )
 
                             AnimatedContent(
                                 targetState = displayedIcon != null,
@@ -407,23 +427,12 @@ fun OngoingActionProgress(
                             }
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(2.dp)
-                                .clip(RoundedCornerShape(1.dp))
-                                .background(statusColor.copy(alpha = 0.18f)),
-                        ) {
-                            if (progressValue > 0f) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .fillMaxWidth(progressValue)
-                                        .clip(RoundedCornerShape(1.dp))
-                                        .background(statusColor.copy(alpha = 0.9f)),
-                                )
-                            }
-                        }
+                        ProgressBar(
+                            progress = state.progress,
+                            maxProgress = state.maxProgress,
+                            statusColor = statusColor,
+                            modifier = Modifier.weight(1f).height(2.dp)
+                        )
                     }
                 }
             }
@@ -486,7 +495,7 @@ data class ProgressState(
     val isVisible: Boolean = false,
     val progress: Int = 0,
     val maxProgress: Int = 100,
-    val icon: androidx.compose.ui.graphics.ImageBitmap? = null,
+    val icon: ImageBitmap? = null,
     val packageName: String? = null,
     val isIconAdaptive: Boolean = false,
     val isCompactMode: Boolean = false,
@@ -518,13 +527,7 @@ class OnGoingActionProgressComposeController(
 
     private val javaController: OnGoingActionProgressController
 
-    private var lastDrawable: android.graphics.drawable.Drawable? = null
-    private var lastCompactState: Boolean? = null
-    private var cachedBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
-
     init {
-        Log.d(TAG, "Initializing OnGoingActionProgressComposeController")
-
         try {
             javaController = OnGoingActionProgressController(
                 context,
@@ -541,36 +544,12 @@ class OnGoingActionProgressComposeController(
                 notifSuppressController
             )
 
-            javaController.setStateCallback { isVisible, progress, maxProgress, icon, isAdaptive, packageName, isCompact, opacity, showMenu, activeStateType, batteryLevel, isCharging, isPowerSave, iconTint ->
-                
-                val iconBitmap = if (icon === lastDrawable && isCompact == lastCompactState && cachedBitmap != null) {
-                    cachedBitmap
-                } else {
-                    lastDrawable = icon
-                    lastCompactState = isCompact
-                    try {
-                        val iconSizePx = if (isCompact) {
-                            (18 * context.resources.displayMetrics.density).toInt()
-                        } else {
-                            (20 * context.resources.displayMetrics.density).toInt()
-                        }
-
-                        icon?.toBitmap(
-                            width = iconSizePx,
-                            height = iconSizePx,
-                            config = Bitmap.Config.ARGB_8888,
-                        )?.asImageBitmap()?.also { cachedBitmap = it }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to convert icon to bitmap", e)
-                        null
-                    }
-                }
-
+            javaController.setStateCallback { isVisible, progress, maxProgress, iconBitmap, isAdaptive, packageName, isCompact, opacity, showMenu, activeStateType, batteryLevel, isCharging, isPowerSave, iconTint ->
                 _state.value = ProgressState(
                     isVisible = isVisible,
                     progress = progress,
                     maxProgress = maxProgress,
-                    icon = iconBitmap,
+                    icon = iconBitmap?.asImageBitmap(),
                     packageName = packageName,
                     isIconAdaptive = isAdaptive,
                     isCompactMode = isCompact,
@@ -589,35 +568,12 @@ class OnGoingActionProgressComposeController(
         }
     }
 
-    fun destroy() {
-        javaController.destroy()
-    }
-
-    fun onInteraction() {
-        javaController.onInteraction()
-    }
-
-    fun onMediaAction(action: Int) {
-        javaController.onMediaAction(action)
-    }
-
-    fun onMediaMenuDismiss() {
-        javaController.onMediaMenuDismiss()
-    }
-
-    fun onDoubleTap() {
-        javaController.onDoubleTap()
-    }
-
-    fun onSwipe(isNext: Boolean) {
-        javaController.onSwipe(isNext)
-    }
-
-    fun onLongPress() {
-        javaController.onLongPress()
-    }
-
-    fun setSystemChipVisible(visible: Boolean) {
-        javaController.setSystemChipVisible(visible)
-    }
+    fun destroy() = javaController.destroy()
+    fun onInteraction() = javaController.onInteraction()
+    fun onMediaAction(action: Int) = javaController.onMediaAction(action)
+    fun onMediaMenuDismiss() = javaController.onMediaMenuDismiss()
+    fun onDoubleTap() = javaController.onDoubleTap()
+    fun onSwipe(isNext: Boolean) = javaController.onSwipe(isNext)
+    fun onLongPress() = javaController.onLongPress()
+    fun setSystemChipVisible(visible: Boolean) = javaController.setSystemChipVisible(visible)
 }
