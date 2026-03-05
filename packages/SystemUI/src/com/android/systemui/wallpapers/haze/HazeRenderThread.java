@@ -50,16 +50,16 @@ public class HazeRenderThread extends HandlerThread {
   private EGLSurface mEglSurface;
   private HazeRenderer mRenderer;
 
-  private boolean mIsAnimating = false;
+  private volatile boolean mIsAnimating = false;
   private long mStartTime;
   private long mDuration;
-  private float mStartBlur;
-  private float mTargetBlur;
+  private volatile float mStartBlur;
+  private volatile float mTargetBlur;
 
-  private float mCurrentBlur = 0f;
+  private volatile float mCurrentBlur = 0f;
   private int mStyle = 0;
   private float mIntensity = 0.5f;
-  private int mCurrentState = -1;
+  private volatile int mCurrentState = -1;
 
   private boolean mNeedsReblur = false;
   private float mLastIntensity = -1f;

@@ -230,17 +230,17 @@ public class ImageWallpaper extends WallpaperService {
     }
 
     private void updateHazeState() {
+      boolean wasHazeEnabled = mIsHazeEnabled;
       mIsHazeEnabled =
-          Settings.System.getInt(getDisplayContext().getContentResolver(), KEY_HAZE_ENABLED, 0)
-              == 1;
-      if (mHazeThread != null) {
+          Settings.System.getInt(getDisplayContext().getContentResolver(), KEY_HAZE_ENABLED, 0) == 1;
+
+      if (wasHazeEnabled != mIsHazeEnabled) {
+        if (mSurfaceHolder != null && mSurfaceHolder.getSurface().isValid()) {
+          drawFrame();
+        }
+      } else if (mIsHazeEnabled && mHazeThread != null) {
         mHazeThread.updateSettings();
         mHazeThread.requestRender();
-      } else if (mIsHazeEnabled
-          && mBitmap != null
-          && mSurfaceHolder != null
-          && mSurfaceHolder.getSurface().isValid()) {
-        drawFrame();
       }
     }
 
@@ -273,6 +273,11 @@ public class ImageWallpaper extends WallpaperService {
       }
       if (mHazeThread != null) {
         mHazeThread.quitSafely();
+        try {
+          mHazeThread.join(500); 
+        } catch (InterruptedException e) {
+          Log.e(TAG, "Interrupted waiting for Haze thread to die");
+        }
         mHazeThread = null;
       }
     }
