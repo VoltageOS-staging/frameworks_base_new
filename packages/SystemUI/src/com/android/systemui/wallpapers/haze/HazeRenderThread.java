@@ -102,7 +102,7 @@ public class HazeRenderThread extends HandlerThread {
       }
       mRenderer = new HazeRenderer();
       mRenderer.init(
-          mHolder.getSurfaceFrame().width(), mHolder.getSurfaceFrame().height(), mBitmap);
+          mHolder.getSurfaceFrame().width(), mHolder.getSurfaceFrame().height(), mBitmap, mStyle, mIntensity);
       mBitmap = null;
       requestRender();
     } catch (Exception e) {
@@ -116,7 +116,7 @@ public class HazeRenderThread extends HandlerThread {
       mHandler.post(
           () -> {
             if (mRenderer != null) {
-              mRenderer.setBitmap(bitmap, mIntensity);
+              mRenderer.setBitmap(bitmap, mIntensity, mStyle);
               requestRender();
             }
           });
@@ -144,14 +144,17 @@ public class HazeRenderThread extends HandlerThread {
   }
 
   private void handleUpdateSettings() {
+    int oldStyle = mStyle;
     mStyle = Settings.System.getInt(mContext.getContentResolver(), "haze_style", 0);
     float rawIntensity =
         Settings.System.getInt(mContext.getContentResolver(), "haze_intensity", 50) / 100f;
-    mIntensity = rawIntensity * 0.55f;
+    float newIntensity = rawIntensity * 0.55f;
 
-    if (mLastIntensity != -1f && Math.abs(mLastIntensity - mIntensity) > 0.01f) {
+    if (mLastIntensity != -1f 
+        && (oldStyle != mStyle || Math.abs(mLastIntensity - newIntensity) > 0.01f)) {
       mNeedsReblur = true;
     }
+    mIntensity = newIntensity;
     mLastIntensity = mIntensity;
     requestRender();
   }
@@ -195,11 +198,9 @@ public class HazeRenderThread extends HandlerThread {
           target = 1f;
           duration = 0L;
         } else if (state == 1) {
-          mCurrentBlur = 1f;
           target = 0f;
           duration = 2500L;
         } else if (state == 2) {
-          mCurrentBlur = 0f;
           target = 1f;
           duration = 2000L;
         }
@@ -215,7 +216,15 @@ public class HazeRenderThread extends HandlerThread {
 
     mStartBlur = mCurrentBlur;
     mTargetBlur = target;
-    mDuration = duration;
+    float distance = Math.abs(mTargetBlur - mStartBlur);
+    mDuration = (long) (duration * distance);
+
+    if (mDuration <= 16L) {
+      mCurrentBlur = target;
+      mIsAnimating = false;
+      requestRender();
+      return;
+    }
     mStartTime = SystemClock.uptimeMillis();
     mIsAnimating = true;
     requestRender();
@@ -297,7 +306,7 @@ public class HazeRenderThread extends HandlerThread {
     }
 
     if (mNeedsReblur) {
-      mRenderer.updateBlur(mIntensity);
+      mRenderer.updateBlur(mIntensity, mStyle);
       mNeedsReblur = false;
       needsNextFrame = true;
     }

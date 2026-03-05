@@ -49,9 +49,9 @@ public class HazeRenderer {
   private int mVaoScreenId;
   private int mVaoFboId;
 
-  private static final int KAWASE_PASSES = 3;
-  private int[] mKawaseFbos = new int[KAWASE_PASSES];
-  private int[] mKawaseTextures = new int[KAWASE_PASSES];
+  private static final int MAX_KAWASE_PASSES = 6;
+  private int[] mKawaseFbos = new int[MAX_KAWASE_PASSES];
+  private int[] mKawaseTextures = new int[MAX_KAWASE_PASSES];
 
   private float mAspectRatio = 1.0f;
 
@@ -79,7 +79,7 @@ public class HazeRenderer {
   private int uDownTextureLoc, uDownResolutionLoc, uDownOffsetLoc;
   private int uUpTextureLoc, uUpResolutionLoc, uUpOffsetLoc;
 
-  public void init(int width, int height, Bitmap originalBitmap) {
+  public void init(int width, int height, Bitmap originalBitmap, int style, float intensity) {
     mWidth = width;
     mHeight = height;
     mAspectRatio = (float) width / height;
@@ -107,11 +107,11 @@ public class HazeRenderer {
     cacheUniforms();
     setupVAOs();
 
-    GLES30.glGenFramebuffers(KAWASE_PASSES, mKawaseFbos, 0);
+    GLES30.glGenFramebuffers(MAX_KAWASE_PASSES, mKawaseFbos, 0);
     allocateKawaseBuffers(mWidth, mHeight);
 
     mSharpTextureId = uploadTexture(originalBitmap);
-    updateBlur(0.5f);
+    updateBlur(intensity, style);
 
     if (originalBitmap != null && !originalBitmap.isRecycled()) {
       initBaseBlobs(originalBitmap);
@@ -120,12 +120,12 @@ public class HazeRenderer {
     GLES30.glViewport(0, 0, width, height);
   }
 
-  public void setBitmap(Bitmap originalBitmap, float intensity) {
+  public void setBitmap(Bitmap originalBitmap, float intensity, int style) {
     if (mSharpTextureId != 0) {
       GLES30.glDeleteTextures(1, new int[] {mSharpTextureId}, 0);
     }
     mSharpTextureId = uploadTexture(originalBitmap);
-    updateBlur(intensity);
+    updateBlur(intensity, style);
 
     if (originalBitmap != null && !originalBitmap.isRecycled()) {
       initBaseBlobs(originalBitmap);
@@ -134,11 +134,11 @@ public class HazeRenderer {
 
   private void allocateKawaseBuffers(int w, int h) {
     if (mKawaseTextures[0] != 0) {
-      GLES30.glDeleteTextures(KAWASE_PASSES, mKawaseTextures, 0);
+      GLES30.glDeleteTextures(MAX_KAWASE_PASSES, mKawaseTextures, 0);
     }
-    for (int i = 0; i < KAWASE_PASSES; i++) {
-      int downW = Math.max(1, w >> (i + 1));
-      int downH = Math.max(1, h >> (i + 1));
+    for (int i = 0; i < MAX_KAWASE_PASSES; i++) {
+      int downW = Math.max(32, w >> (i + 1));
+      int downH = Math.max(32, h >> (i + 1));
       mKawaseTextures[i] = createEmptyTexture(downW, downH);
       GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, mKawaseFbos[i]);
       GLES30.glFramebufferTexture2D(
@@ -212,20 +212,31 @@ public class HazeRenderer {
     uUpOffsetLoc = GLES30.glGetUniformLocation(mKawaseUpProgramId, "uOffset");
   }
 
-  public void updateBlur(float intensity) {
-    float blurOffset = 0.5f + (intensity * 2.0f);
-    gpuKawaseBlur(mSharpTextureId, blurOffset);
+  public void updateBlur(float intensity, int style) {
+    boolean isBlob = (style == 0 || style == 1 || style == 4);
+    float blurOffset;
+    int passes;
+
+    if (isBlob) {
+        blurOffset = 0.5f + (intensity * 2.0f);
+        passes = 3;
+    } else {
+        float normalizedIntensity = Math.max(0f, Math.min(1f, intensity / 0.55f));
+        passes = 2 + Math.round(normalizedIntensity * 4.0f);
+        blurOffset = 0.5f + (normalizedIntensity * 3.0f);
+    }
+    gpuKawaseBlur(mSharpTextureId, blurOffset, passes);
   }
 
-  private void gpuKawaseBlur(int inputTex, float offset) {
+  private void gpuKawaseBlur(int inputTex, float offset, int passes) {
     GLES30.glBindVertexArray(mVaoFboId);
 
     GLES30.glUseProgram(mKawaseDownProgramId);
     GLES30.glUniform1f(uDownOffsetLoc, offset);
 
-    for (int i = 0; i < KAWASE_PASSES; i++) {
-      int currentW = Math.max(1, mWidth >> (i + 1));
-      int currentH = Math.max(1, mHeight >> (i + 1));
+    for (int i = 0; i < passes; i++) {
+      int currentW = Math.max(32, mWidth >> (i + 1));
+      int currentH = Math.max(32, mHeight >> (i + 1));
       GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, mKawaseFbos[i]);
       GLES30.glViewport(0, 0, currentW, currentH);
 
@@ -240,7 +251,7 @@ public class HazeRenderer {
     GLES30.glUseProgram(mKawaseUpProgramId);
     GLES30.glUniform1f(uUpOffsetLoc, offset);
 
-    for (int i = KAWASE_PASSES - 2; i >= 0; i--) {
+    for (int i = passes - 2; i >= 0; i--) {
       int currentW = Math.max(1, mWidth >> (i + 1));
       int currentH = Math.max(1, mHeight >> (i + 1));
       GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, mKawaseFbos[i]);
@@ -360,8 +371,8 @@ public class HazeRenderer {
 
   public void destroy() {
     if (mSharpTextureId != 0) GLES30.glDeleteTextures(1, new int[] {mSharpTextureId}, 0);
-    GLES30.glDeleteTextures(KAWASE_PASSES, mKawaseTextures, 0);
-    GLES30.glDeleteFramebuffers(KAWASE_PASSES, mKawaseFbos, 0);
+    GLES30.glDeleteTextures(MAX_KAWASE_PASSES, mKawaseTextures, 0);
+    GLES30.glDeleteFramebuffers(MAX_KAWASE_PASSES, mKawaseFbos, 0);
     GLES30.glDeleteVertexArrays(2, new int[] {mVaoScreenId, mVaoFboId}, 0);
     GLES30.glDeleteProgram(mProgramId);
     GLES30.glDeleteProgram(mKawaseDownProgramId);
