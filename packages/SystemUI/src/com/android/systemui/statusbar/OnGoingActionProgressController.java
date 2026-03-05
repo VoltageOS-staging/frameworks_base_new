@@ -708,6 +708,7 @@ public class OnGoingActionProgressController
               updateMediaProgressOnly();
           });
       });
+      updateMediaProgressOnly();
       return;
     }
 
@@ -847,6 +848,7 @@ public class OnGoingActionProgressController
             notifyStateCallback();
           });
     }
+        notifyStateCallback();
   }
 
   private void updateNotificationProgressCompact() {

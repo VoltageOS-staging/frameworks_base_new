@@ -144,18 +144,15 @@ fun ProgressBar(progress: Int, maxProgress: Int, statusColor: Color, modifier: M
         (progress.toFloat() / maxProgress.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    Box(
+    Canvas(
         modifier = modifier
             .clip(RoundedCornerShape(1.dp))
-            .background(statusColor.copy(alpha = 0.18f)),
+            .background(statusColor.copy(alpha = 0.18f))
     ) {
         if (progressValue > 0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(progressValue)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(statusColor.copy(alpha = 0.9f)),
+            drawRect(
+                color = statusColor.copy(alpha = 0.9f),
+                size = Size(size.width * progressValue, size.height)
             )
         }
     }
@@ -527,6 +524,9 @@ class OnGoingActionProgressComposeController(
 
     private val javaController: OnGoingActionProgressController
 
+    private var lastBitmap: Bitmap? = null
+    private var cachedImageBitmap: ImageBitmap? = null
+
     init {
         try {
             javaController = OnGoingActionProgressController(
@@ -545,11 +545,20 @@ class OnGoingActionProgressComposeController(
             )
 
             javaController.setStateCallback { isVisible, progress, maxProgress, iconBitmap, isAdaptive, packageName, isCompact, opacity, showMenu, activeStateType, batteryLevel, isCharging, isPowerSave, iconTint ->
+
+                val imageBitmap = if (iconBitmap === lastBitmap) {
+                    cachedImageBitmap
+                } else {
+                    lastBitmap = iconBitmap
+                    cachedImageBitmap = iconBitmap?.asImageBitmap()
+                    cachedImageBitmap
+                }
+
                 _state.value = ProgressState(
                     isVisible = isVisible,
                     progress = progress,
                     maxProgress = maxProgress,
-                    icon = iconBitmap?.asImageBitmap(),
+                    icon = imageBitmap,
                     packageName = packageName,
                     isIconAdaptive = isAdaptive,
                     isCompactMode = isCompact,
