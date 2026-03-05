@@ -35,14 +35,10 @@ public class HazeColorExtractor {
     }
   }
 
-  private static class ColorPoint {
-    int color, x, y;
-
-    ColorPoint(int color, int x, int y) {
-      this.color = color;
-      this.x = x;
-      this.y = y;
-    }
+  private static class Bucket {
+    int start, end;
+    Bucket(int s, int e) { start = s; end = e; }
+    int size() { return end - start; }
   }
 
   public static List<ColorCluster> extractColors(Bitmap original, int targetColors) {
@@ -66,32 +62,42 @@ public class HazeColorExtractor {
     int[] pixels = new int[w * h];
     bitmap.getPixels(pixels, 0, w, 0, 0, w, h);
 
-    List<ColorPoint> samples = new ArrayList<>();
-
     int stepX = Math.max(1, w / 32);
     int stepY = Math.max(1, h / 32);
 
+    int maxSamples = ((w - 1) / stepX + 1) * ((h - 1) / stepY + 1);
+    int[] sampleColors = new int[maxSamples];
+    int[] sampleXs = new int[maxSamples];
+    int[] sampleYs = new int[maxSamples];
+    int[] indices = new int[maxSamples];
+    int sampleCount = 0;
+
     for (int y = 0; y < h; y += stepY) {
       for (int x = 0; x < w; x += stepX) {
-        samples.add(new ColorPoint(pixels[y * w + x], x, y));
+        sampleColors[sampleCount] = pixels[y * w + x];
+        sampleXs[sampleCount] = x;
+        sampleYs[sampleCount] = y;
+        indices[sampleCount] = sampleCount;
+        sampleCount++;
       }
     }
 
-    List<List<ColorPoint>> buckets = new ArrayList<>();
-    buckets.add(samples);
+    List<Bucket> buckets = new ArrayList<>();
+    buckets.add(new Bucket(0, sampleCount));
 
     while (buckets.size() < targetColors) {
-      List<ColorPoint> largestBucket = null;
+      Bucket largestBucket = null;
       int largestRange = 0;
       int splitChannel = 0;
 
-      for (List<ColorPoint> bucket : buckets) {
+      for (Bucket bucket : buckets) {
         if (bucket.size() <= 1) continue;
         int minR = 255, maxR = 0, minG = 255, maxG = 0, minB = 255, maxB = 0;
-        for (ColorPoint p : bucket) {
-          int r = Color.red(p.color);
-          int g = Color.green(p.color);
-          int b = Color.blue(p.color);
+        for (int i = bucket.start; i < bucket.end; i++) {
+          int c = sampleColors[indices[i]];
+          int r = Color.red(c);
+          int g = Color.green(c);
+          int b = Color.blue(c);
           if (r < minR) minR = r;
           if (r > maxR) maxR = r;
           if (g < minG) minG = g;
@@ -110,34 +116,29 @@ public class HazeColorExtractor {
       if (largestBucket == null) break;
 
       final int channel = splitChannel;
-      Collections.sort(
-          largestBucket,
-          (p1, p2) -> {
-            if (channel == 0) return Integer.compare(Color.red(p1.color), Color.red(p2.color));
-            if (channel == 1) return Integer.compare(Color.green(p1.color), Color.green(p2.color));
-            return Integer.compare(Color.blue(p1.color), Color.blue(p2.color));
-          });
+      quickSortIndices(indices, sampleColors, largestBucket.start, largestBucket.end - 1, channel);
 
-      int median = largestBucket.size() / 2;
-      List<ColorPoint> bucket1 = new ArrayList<>(largestBucket.subList(0, median));
-      List<ColorPoint> bucket2 =
-          new ArrayList<>(largestBucket.subList(median, largestBucket.size()));
+      int median = largestBucket.start + largestBucket.size() / 2;
+      Bucket bucket1 = new Bucket(largestBucket.start, median);
+      Bucket bucket2 = new Bucket(median, largestBucket.end);
       buckets.remove(largestBucket);
       buckets.add(bucket1);
       buckets.add(bucket2);
     }
 
     List<ColorCluster> clusters = new ArrayList<>();
-    for (List<ColorPoint> bucket : buckets) {
-      if (bucket.isEmpty()) continue;
+    for (Bucket bucket : buckets) {
+      if (bucket.size() == 0) continue;
       long sumR = 0, sumG = 0, sumB = 0;
       float sumX = 0, sumY = 0;
-      for (ColorPoint p : bucket) {
-        sumR += Color.red(p.color);
-        sumG += Color.green(p.color);
-        sumB += Color.blue(p.color);
-        sumX += p.x;
-        sumY += p.y;
+      for (int i = bucket.start; i < bucket.end; i++) {
+        int idx = indices[i];
+        int c = sampleColors[idx];
+        sumR += Color.red(c);
+        sumG += Color.green(c);
+        sumB += Color.blue(c);
+        sumX += sampleXs[idx];
+        sumY += sampleYs[idx];
       }
       int count = bucket.size();
       int avgColor = Color.rgb((int) (sumR / count), (int) (sumG / count), (int) (sumB / count));
@@ -149,5 +150,29 @@ public class HazeColorExtractor {
     }
 
     return clusters;
+  }
+
+  private static void quickSortIndices(int[] indices, int[] colors, int low, int high, int channel) {
+   if (low < high) {
+      int pi = partition(indices, colors, low, high, channel);
+      quickSortIndices(indices, colors, low, pi - 1, channel);
+      quickSortIndices(indices, colors, pi + 1, high, channel);
+    }
+  }
+
+  private static int partition(int[] indices, int[] colors, int low, int high, int channel) {
+    int pivotColor = colors[indices[high]];
+    int pivotVal = (channel == 0) ? Color.red(pivotColor) : ((channel == 1) ? Color.green(pivotColor) : Color.blue(pivotColor));
+    int i = (low - 1);
+    for (int j = low; j < high; j++) {
+      int c = colors[indices[j]];
+      int val = (channel == 0) ? Color.red(c) : ((channel == 1) ? Color.green(c) : Color.blue(c));
+      if (val <= pivotVal) {
+        i++;
+        int temp = indices[i]; indices[i] = indices[j]; indices[j] = temp;
+      }
+    }
+    int temp = indices[i + 1]; indices[i + 1] = indices[high]; indices[high] = temp;
+    return i + 1;
   }
 }
