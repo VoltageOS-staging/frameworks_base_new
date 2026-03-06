@@ -26,6 +26,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -62,8 +63,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -150,10 +149,12 @@ fun ProgressBar(progress: Int, maxProgress: Int, statusColor: Color, modifier: M
             .background(statusColor.copy(alpha = 0.18f)),
     ) {
         if (progressValue > 0f) {
+            val minFraction = 4f / 96f
+            val clampedFraction = progressValue.coerceAtLeast(minFraction)
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(progressValue)
+                    .fillMaxWidth(clampedFraction)
                     .clip(RoundedCornerShape(1.dp))
                     .background(statusColor.copy(alpha = 0.9f)),
             )
@@ -284,7 +285,7 @@ fun OngoingActionProgress(
                             else -> statusColor
                         }
 
-                        var hasSparked by rememberSaveable { mutableStateOf(false) }
+                        var hasSparked by remember { mutableStateOf(false) }
                         val sparkAlpha = remember { Animatable(0f) }
                         val sparkScale = remember { Animatable(1f) }
 
@@ -397,33 +398,34 @@ fun OngoingActionProgress(
                     val expandedModifier = baseModifier
                         .alpha(state.opacity)
 
-                    Row(
+                    Box(
                         modifier = expandedModifier
                             .width(96.dp)
                             .height(30.dp)
                             .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        AnimatedContent(
-                            targetState = displayedIcon != null,
-                            transitionSpec = {
-                                (fadeIn(tween(120, easing = FastOutSlowInEasing)) + scaleIn(initialScale = 0.8f, animationSpec = tween(120, easing = FastOutSlowInEasing))) togetherWith
-                                (fadeOut(tween(120, easing = FastOutSlowInEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(120, easing = FastOutSlowInEasing)))
-                            },
-                            label = "ExpandedAppIconPresence"
-                        ) { hasIcon ->
-                            if (hasIcon && displayedIcon != null) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Image(
-                                        bitmap = displayedIcon!!,
-                                        contentDescription = "App icon",
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clip(RoundedCornerShape(10.dp)),
-                                        colorFilter = null,
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                }
+                        val hasIcon = displayedIcon != null
+                        val paddingStart by animateDpAsState(
+                            targetValue = if (hasIcon) 26.dp else 0.dp,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "ProgressPadding"
+                        )
+
+                        AnimatedVisibility(
+                            visible = hasIcon,
+                            enter = fadeIn(tween(120, easing = FastOutSlowInEasing)) + scaleIn(initialScale = 0.8f, animationSpec = tween(120, easing = FastOutSlowInEasing)),
+                            exit = fadeOut(tween(120, easing = FastOutSlowInEasing)) + scaleOut(targetScale = 0.8f, animationSpec = tween(120, easing = FastOutSlowInEasing))
+                        ) {
+                            if (displayedIcon != null) {
+                                Image(
+                                    bitmap = displayedIcon!!,
+                                    contentDescription = "App icon",
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(RoundedCornerShape(10.dp)),
+                                    colorFilter = null,
+                                )
                             }
                         }
 
@@ -431,7 +433,10 @@ fun OngoingActionProgress(
                             progress = state.progress,
                             maxProgress = state.maxProgress,
                             statusColor = statusColor,
-                            modifier = Modifier.weight(1f).height(2.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = paddingStart)
+                                .height(2.dp)
                         )
                     }
                 }
@@ -525,6 +530,9 @@ class OnGoingActionProgressComposeController(
     private val _state = MutableStateFlow(ProgressState())
     val state: StateFlow<ProgressState> = _state
 
+    private var lastBitmap: Bitmap? = null
+    private var lastImageBitmap: ImageBitmap? = null
+
     private val javaController: OnGoingActionProgressController
 
     init {
@@ -545,11 +553,15 @@ class OnGoingActionProgressComposeController(
             )
 
             javaController.setStateCallback { isVisible, progress, maxProgress, iconBitmap, isAdaptive, packageName, isCompact, opacity, showMenu, activeStateType, batteryLevel, isCharging, isPowerSave, iconTint ->
+                if (iconBitmap !== lastBitmap) {
+                    lastBitmap = iconBitmap
+                    lastImageBitmap = iconBitmap?.asImageBitmap()
+                }
                 _state.value = ProgressState(
                     isVisible = isVisible,
                     progress = progress,
                     maxProgress = maxProgress,
-                    icon = iconBitmap?.asImageBitmap(),
+                    icon = lastImageBitmap,
                     packageName = packageName,
                     isIconAdaptive = isAdaptive,
                     isCompactMode = isCompact,
@@ -568,7 +580,11 @@ class OnGoingActionProgressComposeController(
         }
     }
 
-    fun destroy() = javaController.destroy()
+    fun destroy() {
+        javaController.destroy()
+        lastBitmap = null
+        lastImageBitmap = null
+    }
     fun onInteraction() = javaController.onInteraction()
     fun onMediaAction(action: Int) = javaController.onMediaAction(action)
     fun onMediaMenuDismiss() = javaController.onMediaMenuDismiss()
