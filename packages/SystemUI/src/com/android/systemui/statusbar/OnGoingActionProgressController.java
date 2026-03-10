@@ -269,13 +269,36 @@ public class OnGoingActionProgressController
     }
   }
 
+  private final BroadcastReceiver mSimStateReceiver =
+      new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+          update5gState();
+        }
+      };
+
+  private void update5gState() {
+    if (mTelephonyManager == null) return;
+    try {
+      boolean hasSim = mTelephonyManager.getSimState() != TelephonyManager.SIM_STATE_ABSENT;
+      long supported = mTelephonyManager.getSupportedRadioAccessFamily();
+      boolean hardwareSupports5g = (supported & TelephonyManager.NETWORK_TYPE_BITMASK_NR) != 0;
+      long allowed = mTelephonyManager.getAllowedNetworkTypesForReason(TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_USER);
+      boolean userAllows5g = (allowed & TelephonyManager.NETWORK_TYPE_BITMASK_NR) != 0;
+
+      updateStateHistory(TYPE_FIVEG, hasSim && hardwareSupports5g && userAllows5g);
+    } catch (Exception e) {
+      Log.w(TAG, "Failed to update 5G state", e);
+      updateStateHistory(TYPE_FIVEG, false);
+    }
+  }
+
   private class NetworkTypeListener extends TelephonyCallback
       implements TelephonyCallback.AllowedNetworkTypesListener {
     @Override
     public void onAllowedNetworkTypesChanged(int reason, long allowedNetworkType) {
       if (reason == TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_USER) {
-        boolean is5g = (allowedNetworkType & TelephonyManager.NETWORK_TYPE_BITMASK_NR) != 0;
-        updateStateHistory(TYPE_FIVEG, is5g);
+        update5gState();
       }
     }
   }
@@ -411,11 +434,9 @@ public class OnGoingActionProgressController
         mNetworkTypeListener = new NetworkTypeListener();
         mTelephonyManager.registerTelephonyCallback(
             mContext.getMainExecutor(), mNetworkTypeListener);
-        long allowed =
-            mTelephonyManager.getAllowedNetworkTypesForReason(
-                TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_USER);
-        boolean is5g = (allowed & TelephonyManager.NETWORK_TYPE_BITMASK_NR) != 0;
-        updateStateHistory(TYPE_FIVEG, is5g);
+        mBroadcastDispatcher.registerReceiver(
+            mSimStateReceiver, new IntentFilter("android.intent.action.SIM_STATE_CHANGED"));
+        update5gState();
       }
     } catch (Exception e) {
       Log.e(TAG, "Failed to register 5G TelephonyCallback", e);
@@ -1694,6 +1715,7 @@ public class OnGoingActionProgressController
 
     mBroadcastDispatcher.unregisterReceiver(mRingerReceiver);
     mBroadcastDispatcher.unregisterReceiver(mConfigurationReceiver);
+    mBroadcastDispatcher.unregisterReceiver(mSimStateReceiver);
 
     mSettingsObserver.unregister();
 
