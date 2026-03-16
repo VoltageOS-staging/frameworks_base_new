@@ -150,31 +150,7 @@ constructor(
             setHorizontalBias(R.id.keyguard_weather_area, 0.0f)
             connect(R.id.keyguard_weather_area, ConstraintSet.TOP, R.id.keyguard_slice_view, ConstraintSet.BOTTOM)
             }
-        } else {
-            weatherInlineView?.setPaddingRelative(0, 0, 0, 0)
-            constraintSet.apply {
-                clear(R.id.keyguard_weather_area, ConstraintSet.START)
-                clear(R.id.keyguard_weather_area, ConstraintSet.END)
-                clear(R.id.keyguard_weather_area, ConstraintSet.TOP)
-                clear(R.id.keyguard_weather_area, ConstraintSet.BOTTOM)
-
-                connect(
-                    R.id.keyguard_weather_area, ConstraintSet.START,
-                    ConstraintSet.PARENT_ID, ConstraintSet.START,
-                    marginStart,
-                )
-                connect(
-                    R.id.keyguard_weather_area, ConstraintSet.END,
-                    ConstraintSet.PARENT_ID, ConstraintSet.END,
-                )
-                constrainHeight(R.id.keyguard_weather_area, ConstraintSet.WRAP_CONTENT)
-                connect(
-                    R.id.keyguard_weather_area, ConstraintSet.TOP,
-                    R.id.keyguard_slice_view, ConstraintSet.BOTTOM,
-                )
-            }
         }
-    }
 
     override fun removeViews(constraintLayout: ConstraintLayout) {
         if (!isEnabled()) return
