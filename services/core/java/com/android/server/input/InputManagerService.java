@@ -1513,7 +1513,7 @@ public class InputManagerService extends IInputManager.Stub
             throw new IllegalArgumentException("Invalid pointer capture mode " + mode);
         }
 
-        deliverCaptureChanged(enabled);
+        deliverCaptureChanged(mode != View.POINTER_CAPTURE_MODE_UNCAPTURED);
         mNative.requestPointerCapture(inputChannelToken, mode);
     }
 

@@ -798,21 +798,7 @@ void NativeInputManager::getReaderConfiguration(InputReaderConfiguration* outCon
 
         outConfig->mousePointerSpeed = mLocked.pointerSpeed;
         outConfig->displaysWithMouseScalingDisabled = mLocked.displaysWithMouseScalingDisabled;
-        outConfig->pointerVelocityControlParameters.scale =
-                exp2f(mLocked.pointerSpeed * POINTER_SPEED_EXPONENT);
         // constants from frameworks/native/services/inputflinger/include/InputReaderBase.h, should be kept in sync
-        if (mLocked.preventPointerAcceleration & 1) {
-            outConfig->pointerVelocityControlParameters.highThreshold = 0.0f;
-            outConfig->pointerVelocityControlParameters.lowThreshold = 0.0f;
-            outConfig->pointerVelocityControlParameters.acceleration = 1.0f;
-        } else {
-            outConfig->pointerVelocityControlParameters.highThreshold = 500.0f;
-            outConfig->pointerVelocityControlParameters.lowThreshold = 3000.0f;
-            outConfig->pointerVelocityControlParameters.acceleration =
-                mLocked.mousePointerAccelerationEnabled
-                ? android::os::IInputConstants::DEFAULT_POINTER_ACCELERATION
-                : 1;
-        }
         if (mLocked.preventPointerAcceleration & 2) {
             outConfig->wheelVelocityControlParameters.highThreshold = 0.0f;
             outConfig->wheelVelocityControlParameters.lowThreshold = 0.0f;

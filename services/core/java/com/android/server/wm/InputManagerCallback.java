@@ -263,7 +263,7 @@ final class InputManagerCallback implements InputManagerService.WindowManagerCal
             int firstExternalDisplayId = DEFAULT_DISPLAY;
             for (int i = mService.mRoot.mChildren.size() - 1; i >= 0; --i) {
                 final DisplayContent displayContent = mService.mRoot.mChildren.get(i);
-                if (displayContent.getDisplayInfo().state == Display.STATE_OFF
+                if (displayContent.getDisplayInfo().state == Display.STATE_OFF) {
                     continue;
                 }
                 // Heuristic solution here. Currently when "Freeform windows" developer option is
