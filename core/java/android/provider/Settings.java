@@ -7025,6 +7025,42 @@ public final class Settings {
         public static final String STATUS_BAR_BATTERY_STYLE = "status_bar_battery_style";
 
         /**
+         * Whether Back Double Tap gesture is enabled.
+         * @hide
+         */
+        public static final String BACK_TAP_ENABLED = "back_tap_enabled";
+
+        /**
+         * Action mapped to Back Double Tap.
+         * @hide
+         */
+        public static final String BACK_TAP_ACTION = "back_tap_action";
+
+        /**
+         * Sensitivity for Back Double Tap (0=Low, 1=Medium, 2=High).
+         * @hide
+         */
+        public static final String BACK_TAP_SENSITIVITY = "back_tap_sensitivity";
+
+        /**
+         * Back Double Tap: package name of the custom app to launch.
+         * @hide
+         */
+        public static final String BACK_TAP_APP_ACTION = "back_tap_app_action";
+
+        /**
+         * Back Double Tap: friendly name of the custom app to launch.
+         * @hide
+         */
+        public static final String BACK_TAP_APP_FR_ACTION = "back_tap_app_fr_action";
+
+        /**
+         * Back Double Tap: custom activity to launch.
+         * @hide
+         */
+        public static final String BACK_TAP_APP_ACTIVITY_ACTION = "back_tap_app_activity_action";
+
+        /**
          * IMPORTANT: If you add a new public settings you also have to add it to
          * PUBLIC_SETTINGS below. If the new setting is hidden you have to add
          * it to PRIVATE_SETTINGS below. Also add a validator that can validate
