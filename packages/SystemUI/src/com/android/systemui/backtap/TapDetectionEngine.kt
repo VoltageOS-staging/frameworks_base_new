@@ -36,7 +36,7 @@ class TapDetectionEngine(
     private var noiseFloor = 0f
     var sensitivityMultiplier = 4.5f
 
-    private val COOLDOWN_NS = 150_000_000L
+    private val COOLDOWN_NS = 80_000_000L // 80ms, allows GestureStateMachine to enforce the 60ms min window
     private var lastTapNs = 0L
 
     fun updateSensitivity(level: Int) { 

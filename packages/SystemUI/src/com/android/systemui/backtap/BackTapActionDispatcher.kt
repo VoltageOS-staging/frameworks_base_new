@@ -96,7 +96,7 @@ class BackTapActionDispatcher(private val context: Context) {
                 context.startActivityAsUser(it, UserHandle.CURRENT)
             }
         } catch (e: Exception) {
-            Log.e("BackTapAction", "Failed to trigger partial screenshot", e)
+            Log.e(TAG, "Failed to launch custom app: $packageName", e)
         }
     }
 
@@ -107,6 +107,7 @@ class BackTapActionDispatcher(private val context: Context) {
             context.sendBroadcastAsUser(intent, UserHandle.ALL)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to trigger partial screenshot", e)
+        }
     }
 
     private fun toggleNirvanaMode() {

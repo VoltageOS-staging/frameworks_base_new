@@ -165,7 +165,7 @@ class BackTapController @Inject constructor(
         }
 
         Log.d(TAG, "Dispatching Action ID: $currentAction")
-        Handler(Looper.getMainLooper()).postDelayed({
+        mainHandler.postDelayed({
             actionDispatcher.dispatch(currentAction)
         }, 50)
     }
