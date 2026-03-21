@@ -295,4 +295,6 @@
     <!-- Bluetooth battery icon -->
     <string name="bluetooth_battery_icon_title">Bluetooth battery</string>
 
+    <!-- Internet -->
+    <string name="status_bar_settings_network_speed">Internet speed</string>
 </resources>

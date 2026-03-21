@@ -55,6 +55,7 @@ import com.android.systemui.statusbar.gesture.GesturePointerEventListener
 import com.android.systemui.smartpixels.SmartPixelsReceiver
 import com.android.systemui.statusbar.notification.InstantAppNotifier
 import com.android.systemui.statusbar.notification.headsup.StatusBarHeadsUpChangeListener
+import com.android.systemui.statusbar.policy.NetworkSpeedController
 import com.android.systemui.stylus.StylusUsiPowerStartable
 import com.android.systemui.temporarydisplay.chipbar.ChipbarCoordinator
 import com.android.systemui.usb.StorageNotification
@@ -323,6 +324,12 @@ abstract class SystemUICoreStartableModule {
     @IntoMap
     @ClassKey(SmartPixelsReceiver::class)
     abstract fun bindSmartPixelsReceiver(sysui: SmartPixelsReceiver): CoreStartable
+
+    /** Inject into NetworkSpeedController. */
+    @Binds
+    @IntoMap
+    @ClassKey(NetworkSpeedController::class)
+    abstract fun bindNetworkSpeedController(impl: NetworkSpeedController): CoreStartable
 
     /** Inject into ComplicationTypesUpdater. */
     @Binds
