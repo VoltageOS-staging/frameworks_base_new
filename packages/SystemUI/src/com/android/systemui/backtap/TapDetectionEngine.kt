@@ -73,8 +73,8 @@ class TapDetectionEngine(
     private var hpfLastIn = 0f
     private var hpfLastOut = 0f
 
-    private var prevMagnitude = 0f
-    private var magnitudeInitialized = false
+    private var prevZ = 0f
+    private var zInitialized = false
 
     private var gravityX = 0f
     private var gravityY = 0f
@@ -139,18 +139,19 @@ class TapDetectionEngine(
     private fun processResampledSample(s: Resampler.Sample) {
         val gravityShift = updateGravityEstimate(s.x, s.y, s.z)
 
-        val magnitude = sqrt(s.x * s.x + s.y * s.y + s.z * s.z)
-        if (!magnitudeInitialized) {
-            prevMagnitude = magnitude
-            magnitudeInitialized = true
+        val linZ = s.z - gravityZ
+
+        if (!zInitialized) {
+            prevZ = linZ
+            zInitialized = true
             return
         }
 
-        val dMag = magnitude - prevMagnitude
-        prevMagnitude = magnitude
+        val dz = linZ - prevZ
+        prevZ = linZ
 
-        val hpfOut = HPF_PARA * (hpfLastOut + dMag - hpfLastIn)
-        hpfLastIn = dMag
+        val hpfOut = HPF_PARA * (hpfLastOut + dz - hpfLastIn)
+        hpfLastIn = dz
         hpfLastOut = hpfOut
 
         val sampleIndex = pushHistory(
@@ -266,9 +267,9 @@ class TapDetectionEngine(
         )
         val decayRatio = (postEnergy / (pending.accelEnergy + EPSILON)).coerceAtMost(4.0f)
 
-        if (pending.gravityShift > 0.60f) return
+        if (pending.gravityShift > 1.20f) return
         if (decayRatio > 0.85f) return
-        if (gyroAvailable && pending.accelToGyroRatio < 0.90f) return
+        if (gyroAvailable && pending.gyroEnergy > 0.5f && pending.accelToGyroRatio < 0.90f) return
 
         val durationMs = pending.durationSamples * (RESAMPLE_INTERVAL_NS / 1_000_000f)
         val features = TapFeatures(
@@ -384,8 +385,8 @@ class TapDetectionEngine(
         negativePeakDetector.reset()
         hpfLastIn = 0f
         hpfLastOut = 0f
-        prevMagnitude = 0f
-        magnitudeInitialized = false
+        prevZ = 0f
+        zInitialized = false
         gravityX = 0f
         gravityY = 0f
         gravityZ = 0f

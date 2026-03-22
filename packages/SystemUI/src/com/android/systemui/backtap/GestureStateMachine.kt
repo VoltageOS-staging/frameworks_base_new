@@ -26,15 +26,24 @@ class GestureStateMachine(
     private var state = State.IDLE
     private var firstTap: TapCandidate? = null
 
+    var sensitivityMultiplier = 2.2f
+
     private val MAX_TAP_WINDOW_MS = 320L
     private val MIN_TAP_WINDOW_MS = 85L
     private val IDEAL_TAP_INTERVAL_MS = 170L
     private val RHYTHM_TOLERANCE_MS = 140L
-    private val MAX_PEAK_RATIO = 2.5f
+    private val MAX_PEAK_RATIO = 5.0f
     private val MIN_SINGLE_TAP_SCORE = 2.15f
-    private val MIN_COMBINED_SCORE = 4.80f
 
     private val timeoutRunnable = Runnable { reset() }
+
+    private fun minCombinedScore(): Float {
+        return when {
+            sensitivityMultiplier <= 1.5f -> 3.80f  // high sensitivity
+            sensitivityMultiplier >= 3.0f -> 4.40f  // low sensitivity
+            else -> 4.20f                            // medium
+        }
+    }
 
     fun onTapCandidate(candidate: TapCandidate) {
         when (state) {
@@ -55,7 +64,7 @@ class GestureStateMachine(
 
                 if (interval in MIN_TAP_WINDOW_MS..MAX_TAP_WINDOW_MS &&
                     peakRatio <= MAX_PEAK_RATIO &&
-                    combinedScore >= MIN_COMBINED_SCORE) {
+                    combinedScore >= minCombinedScore()) {
                     handler.removeCallbacks(timeoutRunnable)
                     reset()
                     onGestureTriggered()

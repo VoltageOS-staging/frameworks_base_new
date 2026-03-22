@@ -105,6 +105,7 @@ class BackTapController @Inject constructor(
         val sensitivity = Settings.System.getInt(resolver, Settings.System.BACK_TAP_SENSITIVITY, 1)
 
         tapEngine.updateSensitivity(sensitivity)
+        stateMachine.sensitivityMultiplier = tapEngine.sensitivityMultiplier
         updateSensorState()
     }
 
