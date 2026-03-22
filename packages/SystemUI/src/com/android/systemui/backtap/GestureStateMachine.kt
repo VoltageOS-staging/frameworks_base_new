@@ -16,7 +16,7 @@
 package com.android.systemui.backtap
 
 import android.os.Handler
-import android.os.SystemClock
+import kotlin.math.abs
 
 class GestureStateMachine(
     private val handler: Handler,
@@ -24,36 +24,56 @@ class GestureStateMachine(
 ) {
     private enum class State { IDLE, WAIT_SECOND_TAP }
     private var state = State.IDLE
-    private var firstTapTime = 0L
-    private var firstTapPeak = 0f
-    private val MAX_TAP_WINDOW_MS = 400L
-    private val MIN_TAP_WINDOW_MS = 60L
-    private val timeoutRunnable = Runnable { state = State.IDLE }
+    private var firstTap: TapCandidate? = null
 
-    fun onSingleTap(peakMagnitude: Float) {
-        val now = SystemClock.uptimeMillis()
+    private val MAX_TAP_WINDOW_MS = 320L
+    private val MIN_TAP_WINDOW_MS = 85L
+    private val IDEAL_TAP_INTERVAL_MS = 170L
+    private val RHYTHM_TOLERANCE_MS = 140L
+    private val MAX_PEAK_RATIO = 2.5f
+    private val MIN_SINGLE_TAP_SCORE = 2.15f
+    private val MIN_COMBINED_SCORE = 4.80f
+
+    private val timeoutRunnable = Runnable { reset() }
+
+    fun onTapCandidate(candidate: TapCandidate) {
         when (state) {
-            State.IDLE -> {
-                state = State.WAIT_SECOND_TAP
-                firstTapTime = now
-                firstTapPeak = peakMagnitude
-                handler.postDelayed(timeoutRunnable, MAX_TAP_WINDOW_MS)
-            }
+            State.IDLE -> armFirstTap(candidate)
             State.WAIT_SECOND_TAP -> {
-                val minPeak = minOf(peakMagnitude, firstTapPeak).coerceAtLeast(0.001f)
-                val peakRatio = maxOf(peakMagnitude, firstTapPeak) / minPeak
-                
-                if ((now - firstTapTime) in MIN_TAP_WINDOW_MS..MAX_TAP_WINDOW_MS && peakRatio <= 8.0f) {
+                val first = firstTap ?: run {
+                    armFirstTap(candidate)
+                    return
+                }
+
+                val interval = candidate.detectedUptimeMs - first.detectedUptimeMs
+                val minPeak = minOf(candidate.amplitude, first.amplitude).coerceAtLeast(0.001f)
+                val peakRatio = maxOf(candidate.amplitude, first.amplitude) / minPeak
+                val rhythmPenalty =
+                    (abs(interval - IDEAL_TAP_INTERVAL_MS).toFloat() / RHYTHM_TOLERANCE_MS)
+                        .coerceAtMost(1.25f)
+                val combinedScore = first.score + candidate.score - rhythmPenalty
+
+                if (interval in MIN_TAP_WINDOW_MS..MAX_TAP_WINDOW_MS &&
+                    peakRatio <= MAX_PEAK_RATIO &&
+                    combinedScore >= MIN_COMBINED_SCORE) {
                     handler.removeCallbacks(timeoutRunnable)
-                    state = State.IDLE
+                    reset()
                     onGestureTriggered()
                 } else {
-                    firstTapTime = now
-                    firstTapPeak = peakMagnitude
-                    handler.removeCallbacks(timeoutRunnable)
-                    handler.postDelayed(timeoutRunnable, MAX_TAP_WINDOW_MS)
+                    armFirstTap(candidate)
                 }
             }
         }
+    }
+    private fun armFirstTap(candidate: TapCandidate) {
+        firstTap = candidate
+        state = State.WAIT_SECOND_TAP
+        handler.removeCallbacks(timeoutRunnable)
+        handler.postDelayed(timeoutRunnable, MAX_TAP_WINDOW_MS)
+    }
+
+    private fun reset() {
+        state = State.IDLE
+        firstTap = null
     }
 }

@@ -59,8 +59,8 @@ class BackTapController @Inject constructor(
 
     private val actionDispatcher = BackTapActionDispatcher(context)
     private val stateMachine = GestureStateMachine(bgHandler) { executeAction() }
-    private val tapEngine = TapDetectionEngine { peakMag -> 
-        stateMachine.onSingleTap(peakMag) 
+    private val tapEngine = TapDetectionEngine { candidate ->
+        stateMachine.onTapCandidate(candidate)
     }
 
     private var isEnabled = false
@@ -88,6 +88,8 @@ class BackTapController @Inject constructor(
 
     fun setup() {
         val resolver = context.contentResolver
+        tapEngine.setGyroscopeAvailable(gyroscope != null)
+
         resolver.registerContentObserver(Settings.System.getUriFor(Settings.System.BACK_TAP_ENABLED), false, settingsObserver, UserHandle.USER_ALL)
         resolver.registerContentObserver(Settings.System.getUriFor(Settings.System.BACK_TAP_ACTION), false, settingsObserver, UserHandle.USER_ALL)
         resolver.registerContentObserver(Settings.System.getUriFor(Settings.System.BACK_TAP_SENSITIVITY), false, settingsObserver, UserHandle.USER_ALL)
@@ -118,8 +120,14 @@ class BackTapController @Inject constructor(
         val shouldListen = isEnabled && isScreenOn && currentAction != 0
         
         if (shouldListen && !isListening) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_FASTEST, bgHandler)
-            sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_FASTEST, bgHandler)
+            val accel = accelerometer
+            if (accel == null) {
+                Log.w(TAG, "Accelerometer unavailable, cannot enable back tap")
+                return
+            }
+
+            sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_FASTEST, bgHandler)
+            gyroscope?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_FASTEST, bgHandler) }
             
             inputMonitor = InputMonitorCompat("BackTap/TouchGate", 0)
             inputEventReceiver = inputMonitor?.getInputReceiver(
@@ -186,12 +194,9 @@ class BackTapController @Inject constructor(
                 tapEngine.processSensorEvent(event)
             }
             Sensor.TYPE_GYROSCOPE -> {
-                val x = event.values[0]; val y = event.values[1]; val z = event.values[2]
-                val wSq = x * x + y * y + z * z
-                tapEngine.gyroEnergySq = 0.85f * tapEngine.gyroEnergySq + 0.15f * wSq
+                tapEngine.processGyroEvent(event)
             }
         }
     }
-    
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
