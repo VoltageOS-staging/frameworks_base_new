@@ -911,6 +911,8 @@
     <dimen name="keyguard_status_view_bottom_margin">16dp</dimen>
     <!-- Minimum margin between clock and status bar -->
     <dimen name="keyguard_clock_top_margin">16dp</dimen>
+    <!-- Max additional top margin offset applied via user clock placement slider (0-100%) -->
+    <dimen name="keyguard_clock_max_placement_offset">150dp</dimen>
     <!-- The amount to shift the clocks during a small/large transition -->
     <dimen name="keyguard_clock_switch_y_shift">14dp</dimen>
 

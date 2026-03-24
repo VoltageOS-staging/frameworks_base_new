@@ -13501,6 +13501,24 @@ public final class Settings {
                 "lockscreen_use_double_line_clock";
 
         /**
+         * Top margin percent (0-100) for the small lockscreen clock.
+         * 0 means default position, higher values move the clock further down.
+         *
+         * @hide
+         */
+        public static final String LOCKSCREEN_SMALL_CLOCK_MARGIN_PERCENT =
+                "lockscreen_small_clock_margin_percent";
+
+        /**
+         * Top margin percent (0-100) for the large lockscreen clock.
+         * 0 means default position, higher values move the clock further down.
+         *
+         * @hide
+         */
+        public static final String LOCKSCREEN_LARGE_CLOCK_MARGIN_PERCENT =
+                "lockscreen_large_clock_margin_percent";
+
+        /**
          * Whether to show the vibrate icon in the Status Bar (default off)
          *
          * @hide

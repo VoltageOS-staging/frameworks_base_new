@@ -56,7 +56,7 @@ class KeyguardClockViewModel
 @Inject
 constructor(
     private val context: Context,
-    keyguardClockInteractor: KeyguardClockInteractor,
+    private val keyguardClockInteractor: KeyguardClockInteractor,
     @Application private val applicationScope: CoroutineScope,
     @Background private val backgroundScope: CoroutineScope,
     aodNotificationIconViewModel: NotificationIconContainerAlwaysOnDisplayViewModel,
@@ -71,6 +71,12 @@ constructor(
     var burnInLayer: Layer? = null
 
     val clockSize: StateFlow<ClockSize> = keyguardClockInteractor.clockSize
+
+    /** User-configured small clock top margin percent, 0-100 */
+    val smallClockMarginPercent: StateFlow<Int> = keyguardClockInteractor.smallClockMarginPercent
+
+    /** User-configured large clock top margin percent, 0-100 */
+    val largeClockMarginPercent: StateFlow<Int> = keyguardClockInteractor.largeClockMarginPercent
 
     val isLargeClockVisible: StateFlow<Boolean> =
         clockSize
@@ -164,7 +170,7 @@ constructor(
 
     /** Calculates the top margin for the small clock. */
     fun getSmallClockTopMargin(): Int {
-        return ClockPreviewConfig(
+        val baseMargin = ClockPreviewConfig(
                 isFullWidthShade = shadeModeInteractor.isFullWidthShade.value,
                 isSceneContainerFlagEnabled = SceneContainerFlag.isEnabled,
                 statusBarHeight = systemBarUtils.getStatusBarHeaderHeightKeyguard(),
@@ -180,19 +186,23 @@ constructor(
                     ),
             )
             .getSmallClockTopPadding()
+        val extraOffsetPx = smallClockMarginPercent.value *
+            context.resources.getDimensionPixelSize(SysuiR.dimen.keyguard_clock_max_placement_offset) / 100
+        return baseMargin + extraOffsetPx
     }
 
     val smallClockTopMargin =
         combine(
             configurationInteractor.onAnyConfigurationChange,
             shadeModeInteractor.isFullWidthShade,
-        ) { _, _ ->
+            smallClockMarginPercent,
+        ) { _, _, _ ->
             getSmallClockTopMargin()
         }
 
     /** Calculates the top margin for the large clock. */
     fun getLargeClockTopMargin(): Int {
-        return if (com.android.systemui.shared.Flags.clockReactiveSmartspaceLayout()) {
+        val baseMargin = if (com.android.systemui.shared.Flags.clockReactiveSmartspaceLayout()) {
             systemBarUtils.getStatusBarHeight() / 2 +
                 resources.getDimensionPixelSize(clocksR.dimen.keyguard_smartspace_top_offset)
         } else {
@@ -200,6 +210,9 @@ constructor(
                 resources.getDimensionPixelSize(clocksR.dimen.small_clock_padding_top) +
                 resources.getDimensionPixelSize(clocksR.dimen.keyguard_smartspace_top_offset)
         }
+        val extraOffsetPx = largeClockMarginPercent.value *
+            context.resources.getDimensionPixelSize(SysuiR.dimen.keyguard_clock_max_placement_offset) / 100
+        return baseMargin + extraOffsetPx
     }
 
     val largeClockTextSize: Flow<Int> =

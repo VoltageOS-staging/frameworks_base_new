@@ -111,6 +111,18 @@ object KeyguardClockViewBinder {
                     }
 
                     launch {
+                        viewModel.smallClockMarginPercent.collect {
+                            blueprintInteractor.refreshBlueprint(Type.NoTransition)
+                        }
+                    }
+
+                    launch {
+                        viewModel.largeClockMarginPercent.collect {
+                            blueprintInteractor.refreshBlueprint(Type.NoTransition)
+                        }
+                    }
+
+                    launch {
                         viewModel.clockShouldBeCentered.collect {
                             viewModel.currentClock.value?.let {
                                 if (it.largeClock.config.hasCustomPositionUpdatedAnimation) {
