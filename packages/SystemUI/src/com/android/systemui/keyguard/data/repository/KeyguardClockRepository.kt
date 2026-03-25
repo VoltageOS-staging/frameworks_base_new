@@ -80,9 +80,6 @@ interface KeyguardClockRepository {
 
     /** User-configured top margin offset percent (0-100) for the small lockscreen clock. */
     val smallClockMarginPercent: StateFlow<Int>
-
-    /** User-configured top margin offset percent (0-100) for the large lockscreen clock. */
-    val largeClockMarginPercent: StateFlow<Int>
 }
 
 @SysUISingleton
@@ -154,32 +151,6 @@ constructor(
                 started = SharingStarted.WhileSubscribed(),
                 initialValue = secureSettings.getIntForUser(
                     Settings.Secure.LOCKSCREEN_SMALL_CLOCK_MARGIN_PERCENT,
-                    0,
-                    UserHandle.USER_CURRENT,
-                ),
-            )
-
-    override val largeClockMarginPercent: StateFlow<Int> =
-        secureSettings
-            .observerFlow(
-                names = arrayOf(Settings.Secure.LOCKSCREEN_LARGE_CLOCK_MARGIN_PERCENT),
-                userId = UserHandle.USER_ALL,
-            )
-            .onStart { emit(Unit) }
-            .map {
-                withContext(backgroundDispatcher) {
-                    secureSettings.getIntForUser(
-                        Settings.Secure.LOCKSCREEN_LARGE_CLOCK_MARGIN_PERCENT,
-                        0,
-                        UserHandle.USER_CURRENT,
-                    )
-                }
-            }
-            .stateIn(
-                scope = applicationScope,
-                started = SharingStarted.WhileSubscribed(),
-                initialValue = secureSettings.getIntForUser(
-                    Settings.Secure.LOCKSCREEN_LARGE_CLOCK_MARGIN_PERCENT,
                     0,
                     UserHandle.USER_CURRENT,
                 ),

@@ -95,9 +95,6 @@ constructor(
     /** User-configured top margin offset percent (0-100) for the small lockscreen clock. */
     val smallClockMarginPercent: StateFlow<Int> = keyguardClockRepository.smallClockMarginPercent
 
-    /** User-configured top margin offset percent (0-100) for the large lockscreen clock. */
-    val largeClockMarginPercent: StateFlow<Int> = keyguardClockRepository.largeClockMarginPercent
-
     val isAodPromotedNotificationPresent: Flow<Boolean> =
         if (PromotedNotificationUi.isEnabled) {
             aodPromotedNotificationInteractor.isPresent

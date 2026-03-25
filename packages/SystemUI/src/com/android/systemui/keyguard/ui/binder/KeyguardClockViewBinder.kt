@@ -112,13 +112,7 @@ object KeyguardClockViewBinder {
 
                     launch {
                         viewModel.smallClockMarginPercent.collect {
-                            blueprintInteractor.refreshBlueprint(Type.NoTransition)
-                        }
-                    }
-
-                    launch {
-                        viewModel.largeClockMarginPercent.collect {
-                            blueprintInteractor.refreshBlueprint(Type.NoTransition)
+                            blueprintInteractor.refreshBlueprint(Type.DefaultTransition)
                         }
                     }
 
