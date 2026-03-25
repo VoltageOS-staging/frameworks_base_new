@@ -75,9 +75,6 @@ constructor(
     /** User-configured small clock top margin percent, 0-100 */
     val smallClockMarginPercent: StateFlow<Int> = keyguardClockInteractor.smallClockMarginPercent
 
-    /** User-configured large clock top margin percent, 0-100 */
-    val largeClockMarginPercent: StateFlow<Int> = keyguardClockInteractor.largeClockMarginPercent
-
     val isLargeClockVisible: StateFlow<Boolean> =
         clockSize
             .map { it == ClockSize.LARGE }
@@ -210,9 +207,7 @@ constructor(
                 resources.getDimensionPixelSize(clocksR.dimen.small_clock_padding_top) +
                 resources.getDimensionPixelSize(clocksR.dimen.keyguard_smartspace_top_offset)
         }
-        val extraOffsetPx = largeClockMarginPercent.value *
-            context.resources.getDimensionPixelSize(SysuiR.dimen.keyguard_clock_max_placement_offset) / 100
-        return baseMargin + extraOffsetPx
+        return baseMargin
     }
 
     val largeClockTextSize: Flow<Int> =
