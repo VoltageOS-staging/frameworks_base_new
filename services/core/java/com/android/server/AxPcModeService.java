@@ -99,10 +99,17 @@ public class AxPcModeService extends SystemService implements IAxPcModeService {
                 }
             } else if (uri.equals(Settings.Secure.getUriFor(SETTING_DISPLAY_OFF_KEY))) {
                 updateDisplayOffState();
-            } else if (uri.equals(Settings.Secure.getUriFor(SETTING_DENSITY_OVERRIDE_KEY))
-                    || uri.equals(Settings.Secure.getUriFor(SETTING_SECONDARY_DENSITY_KEY))) {
+            } else if (uri.equals(Settings.Secure.getUriFor(SETTING_DENSITY_OVERRIDE_KEY))) {
                 if (mPcModeEnabled) {
-                    forceDesktopDensity(getTargetDisplayId(), false);
+                    forceDesktopDensity(Display.DEFAULT_DISPLAY, false);
+                }
+            } else if (uri.equals(Settings.Secure.getUriFor(SETTING_SECONDARY_DENSITY_KEY))) {
+                if (mPcModeEnabled) {
+                    int targetId = getTargetDisplayId();
+                    if (targetId != Display.DEFAULT_DISPLAY
+                            && targetId != Display.INVALID_DISPLAY) {
+                        forceDesktopDensity(targetId, false);
+                    }
                 }
             } else if (uri.equals(Settings.Secure.getUriFor(SETTING_TARGET_DISPLAY_ID))) {
                 onTargetDisplayChanged();
@@ -296,9 +303,14 @@ public class AxPcModeService extends SystemService implements IAxPcModeService {
                         | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                 mContext.startActivityAsUser(homeIntent, UserHandle.CURRENT);
 
+                int targetDisplay = getTargetDisplayId();
                 restoreNavigationMode();
                 restoreDisplayDensity(Display.DEFAULT_DISPLAY);
                 restoreDisplaySize(Display.DEFAULT_DISPLAY);
+                if (targetDisplay != Display.DEFAULT_DISPLAY
+                        && targetDisplay != Display.INVALID_DISPLAY) {
+                    restoreDisplayDensity(targetDisplay);
+                }
 
                 setInternalDisplayPowerMode(true);
                 setTargetDisplayId(Display.INVALID_DISPLAY);
@@ -353,7 +365,9 @@ public class AxPcModeService extends SystemService implements IAxPcModeService {
     }
 
     private void setAppEnabled(boolean enabled) {
-        if (!enabled) {
+        if (enabled) {
+            mIntentionalDisable = false;
+        } else {
             mIntentionalDisable = true;
         }
         BackgroundThread.getHandler().post(() -> {
@@ -490,16 +504,23 @@ public class AxPcModeService extends SystemService implements IAxPcModeService {
                         UserHandle.USER_CURRENT);
 
                 if (saveCurrent) {
-                    int currentDensity = mIWindowManager.getBaseDisplayDensity(displayId);
-                    if (currentDensity == targetDpi) {
-                        currentDensity = mIWindowManager.getInitialDisplayDensity(displayId);
+                    String key = savedDensityKey(displayId);
+                    int existingSaved = Settings.Secure.getIntForUser(
+                            mContentResolver, key, -1, UserHandle.USER_CURRENT);
+                    if (existingSaved == -1) {
+                        int currentDensity = mIWindowManager.getBaseDisplayDensity(displayId);
+                        Settings.Secure.putIntForUser(
+                                mContentResolver,
+                                key,
+                                currentDensity,
+                                UserHandle.USER_CURRENT
+                        );
+                        Slog.d(TAG, "Saved density: " + currentDensity
+                                + " (display " + displayId + ")");
+                    } else {
+                        Slog.d(TAG, "Density backup already exists: " + existingSaved
+                                + " (display " + displayId + "), skipping save");
                     }
-                    Settings.Secure.putIntForUser(
-                            mContentResolver,
-                            savedDensityKey(displayId),
-                            currentDensity,
-                            UserHandle.USER_CURRENT);
-                    Slog.d(TAG, "Saved density: " + currentDensity + " (display " + displayId + ")");
                 }
 
                 mIWindowManager.setForcedDisplayDensityForUser(
@@ -636,8 +657,11 @@ public class AxPcModeService extends SystemService implements IAxPcModeService {
         }
         final int storedId = getStoredTargetDisplayId();
         if (storedId == displayId) {
-            Slog.i(TAG, "Target display removed (" + displayId + "), clearing and disabling app");
-            mHandler.post(() -> setTargetDisplayId(Display.INVALID_DISPLAY));
+            Slog.i(TAG, "Target display removed (" + displayId + "), restoring density and disabling app");
+            mHandler.post(() -> {
+                restoreDisplayDensity(displayId);
+                setTargetDisplayId(Display.INVALID_DISPLAY);
+            });
         }
     }
 
