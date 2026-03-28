@@ -248,6 +248,7 @@ import com.android.internal.util.voltage.VoltageUtils;
 import com.android.internal.widget.LockPatternUtils;
 import com.android.internal.util.voltage.VoltageUtils;
 import com.android.server.AccessibilityManagerInternal;
+import com.android.server.AxPcModeService;
 import com.android.server.DockObserverInternal;
 import com.android.server.ExtconStateObserver;
 import com.android.server.ExtconUEventObserver;
@@ -2132,6 +2133,17 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         boolean handleHomeButton(IBinder focusedToken, KeyEvent event) {
+            if (AxPcModeService.getService().isPcModeEnabled()) {
+                if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                    Intent intent = new Intent();
+                    intent.setComponent(new ComponentName("com.android.axion.axpcmode",
+                            "com.android.axion.axpcmode.activities.PcModeLauncherActivity"));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                    mContext.startActivityAsUser(intent, UserHandle.CURRENT);
+                }
+                return true;
+            }
             final boolean keyguardOn = keyguardOn();
             final int repeatCount = event.getRepeatCount();
             final boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
