@@ -448,6 +448,7 @@ import com.android.internal.util.Preconditions;
 import com.android.internal.util.function.pooled.PooledLambda;
 import com.android.server.AlarmManagerInternal;
 import com.android.server.AxExtServiceFactory;
+import com.android.server.AxPcModeService;
 import com.android.server.BootReceiver;
 import com.android.server.DeviceIdleInternal;
 import com.android.server.DisplayThread;
@@ -3424,6 +3425,11 @@ public class ActivityManagerService extends IActivityManager.Stub
             info.putString("shortMsg", "Process crashed.");
             finishInstrumentationLocked(app, Activity.RESULT_CANCELED, info);
         });
+
+        if ("com.android.axion.axpcmode".equals(app.processName)
+                && AxPcModeService.getService().isPcModeEnabled()) {
+            AxPcModeService.getService().onPcModeProcessDied();
+        }
     }
 
     @GuardedBy(anyOf = {"this", "mProcLock"})
