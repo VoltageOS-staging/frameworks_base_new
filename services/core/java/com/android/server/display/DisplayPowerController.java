@@ -78,6 +78,7 @@ import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.internal.util.FrameworkStatsLog;
 import com.android.internal.util.RingBuffer;
+import com.android.server.AxPcModeService;
 import com.android.server.LocalServices;
 import com.android.server.am.BatteryStatsService;
 import com.android.server.display.RampAnimator.DualRampAnimator;
@@ -2274,6 +2275,10 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
             }
             mWindowManagerPolicy.screenTurningOn(mDisplayId, mPendingScreenOnUnblocker);
             Slog.i(TAG, "Window Manager Policy screenTurningOn complete");
+        }
+
+        if (mDisplayId == Display.DEFAULT_DISPLAY) {
+            AxPcModeService.getService().onScreenStateChanged(isOff);
         }
 
         // Return true if the screen isn't blocked.

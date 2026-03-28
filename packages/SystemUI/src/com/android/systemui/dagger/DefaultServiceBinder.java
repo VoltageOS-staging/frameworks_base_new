@@ -21,6 +21,7 @@ import android.app.Service;
 import com.android.systemui.CPUInfoService;
 import com.android.systemui.FPSInfoService;
 import com.android.systemui.SystemUIService;
+import com.android.systemui.axplatform.AxPlatformService;
 import com.android.systemui.communal.widgets.GlanceableHubWidgetManagerService;
 import com.android.systemui.doze.DozeService;
 import com.android.systemui.dreams.DreamOverlayService;
@@ -114,4 +115,10 @@ public abstract class DefaultServiceBinder {
     @IntoMap
     @ClassKey(CPUInfoService.class)
     public abstract Service bindCPUInfoService(CPUInfoService service);
+
+    /** Inject into AxPlatformService */
+    @Binds
+    @IntoMap
+    @ClassKey(AxPlatformService.class)
+    public abstract Service bindAxPlatformService(AxPlatformService service);
 }
