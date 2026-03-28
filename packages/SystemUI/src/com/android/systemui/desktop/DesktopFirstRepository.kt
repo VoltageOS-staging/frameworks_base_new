@@ -19,6 +19,7 @@ package com.android.systemui.desktop
 import com.android.systemui.dagger.SysUISingleton
 import com.android.wm.shell.desktopmode.DesktopMode
 import com.android.wm.shell.shared.desktopmode.DesktopFirstListener
+import android.util.Log
 import java.util.Optional
 import javax.inject.Inject
 
@@ -38,7 +39,14 @@ class DesktopFirstRepository @Inject constructor(desktopMode: Optional<DesktopMo
     private val _isDisplayDesktopFirst: MutableMap<Int, Boolean> = mutableMapOf()
 
     init {
-        desktopMode.ifPresent { desktopMode.get().registerDesktopFirstListener(this) }
+        desktopMode.ifPresent {
+            try {
+                desktopMode.get().registerDesktopFirstListener(this)
+            } catch (e: UnsupportedOperationException) {
+                // DesktopFirstListenerManager not available; axpcmode handles desktop, skip.
+                Log.w("DesktopFirstRepository", "registerDesktopFirstListener skipped: ${e.message}")
+            }
+        }
     }
 
     /**

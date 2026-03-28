@@ -1140,6 +1140,9 @@ public class DisplayRotation {
     @Surface.Rotation
     int rotationForOrientation(@ScreenOrientation int orientation,
             @Surface.Rotation int lastRotation) {
+        if (mDisplayPolicy.isAxPcModeEnabled()) {
+            orientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        }
 
         final WindowContainer<?> source = mDisplayContent.getLastOrientationSource();
         if (source != null) {

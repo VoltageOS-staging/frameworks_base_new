@@ -1792,6 +1792,10 @@ public final class SystemServer implements Dumpable {
             mSystemServiceManager.startService(VoltageSystemExService.class);
             t.traceEnd();
 
+            t.traceBegin("StartAxPcModeService");
+            mSystemServiceManager.startService(AxPcModeService.class);
+            t.traceEnd();
+
             // Start receiving calls from SensorManager services. Start in a separate thread
             // because it need to connect to SensorManager. This has to start
             // after PHASE_WAIT_FOR_SENSOR_SERVICE is done.

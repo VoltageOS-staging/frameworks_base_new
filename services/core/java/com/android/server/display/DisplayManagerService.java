@@ -186,6 +186,7 @@ import com.android.internal.util.ArrayUtils;
 import com.android.internal.util.DumpUtils;
 import com.android.internal.util.FrameworkStatsLog;
 import com.android.internal.util.SettingsWrapper;
+import com.android.server.AxPcModeService;
 import com.android.server.AnimationThread;
 import com.android.server.DisplayThread;
 import com.android.server.LocalServices;
@@ -340,6 +341,9 @@ public final class DisplayManagerService extends SystemService {
     private boolean mShouldDisableHdrConversion = false;
     @GuardedBy("mSyncRoot")
     private int mSystemPreferredHdrOutputType = HDR_TYPE_INVALID;
+
+    @GuardedBy("mSyncRoot")
+    private boolean mDefaultDisplayMirrored = false;
 
 
     // The synchronization root for the display manager.
@@ -2560,6 +2564,8 @@ public final class DisplayManagerService extends SystemService {
                 && display.getDisplayIdLocked() == Display.DEFAULT_DISPLAY) {
             mDisplayTopologyCoordinator.onDisplayAdded(display.getDisplayInfoLocked());
         }
+
+        checkDefaultDisplayMirroringChangedLocked();
     }
 
     private void handleLogicalDisplayChangedLocked(@NonNull LogicalDisplay display) {
@@ -2650,7 +2656,42 @@ public final class DisplayManagerService extends SystemService {
             mDisplayTopologyCoordinator.onDisplayRemoved(display.getDisplayIdLocked());
         }
 
+        checkDefaultDisplayMirroringChangedLocked();
+
         Slog.i(TAG, "Logical display removed: " + display.getDisplayIdLocked());
+    }
+
+    private void checkDefaultDisplayMirroringChangedLocked() {
+        final boolean mirrored = isDefaultDisplayMirroredLocked();
+        if (mirrored != mDefaultDisplayMirrored) {
+            mDefaultDisplayMirrored = mirrored;
+            mHandler.post(() -> AxPcModeService.getService()
+                    .onDefaultDisplayMirroringChanged(mirrored));
+        }
+    }
+
+    private boolean isDefaultDisplayMirroredLocked() {
+        final int[] displayIds = mLogicalDisplayMapper.getDisplayIdsLocked(
+                Process.SYSTEM_UID, /* includeDisabled= */ false);
+        for (int id : displayIds) {
+            if (id == Display.DEFAULT_DISPLAY) {
+                continue;
+            }
+            final LogicalDisplay display = mLogicalDisplayMapper.getDisplayLocked(id);
+            if (display == null) {
+                continue;
+            }
+            final DisplayDevice device = display.getPrimaryDisplayDeviceLocked();
+            if (device == null) {
+                continue;
+            }
+            final boolean ownContent = (device.getDisplayDeviceInfoLocked().flags
+                    & DisplayDeviceInfo.FLAG_OWN_CONTENT_ONLY) != 0;
+            if (!ownContent && !device.isWindowManagerMirroringLocked()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void releaseDisplayAndEmitEvent(LogicalDisplay display, int event) {
@@ -6247,6 +6288,13 @@ public final class DisplayManagerService extends SystemService {
                     return mDisplayWindowPolicyControllers.get(displayId).second;
                 }
                 return null;
+            }
+        }
+
+        @Override
+        public boolean isDefaultDisplayMirrored() {
+            synchronized (mSyncRoot) {
+                return isDefaultDisplayMirroredLocked();
             }
         }
 
