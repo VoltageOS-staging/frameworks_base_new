@@ -42,6 +42,7 @@ class WaveformSeekBar @JvmOverloads constructor(
     
     private var pseudoEnergy = 0f
     private var lastProgress = 0
+    private var lastDrawTime = 0L
 
     private val backgroundPath = Path()
     private val heartbeatLUT = FloatArray(256)
@@ -181,10 +182,17 @@ class WaveformSeekBar @JvmOverloads constructor(
     }
     
     override fun onDraw(canvas: Canvas) {
-        val progressDelta = kotlin.math.abs(progress - lastProgress)
+        val currentTime = android.os.SystemClock.uptimeMillis()
+        val dt = if (lastDrawTime > 0) (currentTime - lastDrawTime).toFloat() else 16f
+        lastDrawTime = currentTime
+        
+        val progressDelta = kotlin.math.abs(progress - lastProgress).toFloat()
         lastProgress = progress
         
-        pseudoEnergy = (pseudoEnergy * 0.9f) + (progressDelta.coerceAtMost(50) / 50f) * 0.1f
+        val decay = kotlin.math.exp((-dt / 200f).toDouble()).toFloat()
+        val velocity = if (dt > 0) progressDelta / dt else 0f
+        val targetEnergy = (velocity / 5f).coerceIn(0f, 1f)
+        pseudoEnergy = (pseudoEnergy * decay) + targetEnergy * (1f - decay)
 
         val width = width.toFloat()
         val height = height.toFloat()
@@ -234,20 +242,26 @@ class WaveformSeekBar @JvmOverloads constructor(
     ) {
         val step = 1.5f * density 
         var x = startX
-        var first = true
+        var prevX = x
+        var prevY = calculateHeartbeatY(prevX, offsetOriginX, centerY)
+        path.moveTo(prevX, prevY)
+        
+        x += step
         
         while (x <= endX) {
-            val y = calculateHeartbeatY(x, offsetOriginX, centerY)
-            if (first) {
-                path.moveTo(x, y)
-                first = false
-            } else {
-                path.lineTo(x, y)
-            }
+            val currY = calculateHeartbeatY(x, offsetOriginX, centerY)
+            val midX = (prevX + x) / 2f
+            val midY = (prevY + currY) / 2f
+            
+            path.quadTo(prevX, prevY, midX, midY)
+            
+            prevX = x
+            prevY = currY
             x += step
         }
         
-        if (!first && x - step < endX) {
+        path.lineTo(prevX, prevY)
+        if (prevX < endX) {
             path.lineTo(endX, calculateHeartbeatY(endX, offsetOriginX, centerY))
         }
     }
@@ -270,15 +284,11 @@ class WaveformSeekBar @JvmOverloads constructor(
     }
 
     private fun gaussian(x: Float, center: Float, width: Float, amp: Float): Float {
-        var diff = x - center
-        if (diff > 0.5f) diff -= 1.0f
-        else if (diff < -0.5f) diff += 1.0f
-        
-        val scaled = diff / width
+        val scaled = (x - center) / width
         
         if (scaled < -3.5f || scaled > 3.5f) return 0f
         
-        return amp * exp((-0.5f * scaled * scaled).toDouble()).toFloat()
+        return amp * kotlin.math.exp((-0.5f * scaled * scaled).toDouble()).toFloat()
     }
 
     fun setWaveformColor(color: Int) {
