@@ -15258,6 +15258,31 @@ public final class Settings {
          * @hide
          */
         public static final String BERRY_BLACK_THEME = "berry_black_theme";
+
+        /** Whether to spoof build props for GMS certification. @hide */
+        public static final String VOL_PIXELPROPS_GMS = "vol_pixelprops_gms";
+
+        /** Whether to spoof build props for Pixel-targeted apps. @hide */
+        public static final String VOL_PPHOOKS_ENABLE = "vol_pphooks_enable";
+
+        /** Whether to spoof build props for Google Photos unlimited storage. @hide */
+        public static final String VOL_GPHOOKS_ENABLE = "vol_gphooks_enable";
+
+        /** Whether to spoof build props for Snapchat. @hide */
+        public static final String VOL_SNAP_ENABLE = "vol_snap_enable";
+
+        /** Whether to spoof build props for Play Store / Finsky. @hide */
+        public static final String VOL_VENDING_ENABLE = "vol_vending_enable";
+
+        /** Whether per-package game prop overrides are active. @hide */
+        public static final String VOL_GAMEPROPS_ENABLED = "vol_gameprops_enabled";
+
+        /** Whether to disguise build props for music apps (Meizu spoof). @hide */
+        public static final String VOL_DISGUISE_MUSIC = "vol_disguise_music";
+
+        /** Whether to spoof Tensor-specific features for non-Tensor devices. @hide */
+        public static final String VOL_SPOOF_TENSOR = "vol_spoof_tensor";
+
     }
 
     /**
@@ -19749,6 +19774,20 @@ public final class Settings {
         @FlaggedApi(android.app.admin.flags.Flags.FLAG_BACKUP_CONNECTED_APPS_SETTINGS)
         public static final String CONNECTED_APPS_DISALLOWED_PACKAGES =
                 "connected_apps_disallowed_packages";
+
+        /**
+         * JSON object containing Play Integrity Fix spoofing values.
+         * Structure: {"BRAND":"google","MODEL":"Pixel 10 Pro XL","FINGERPRINT":"..."}
+         * @hide
+         */
+        public static final String VOL_PIF_CONFIG = "vol_pif_config";
+
+        /**
+         * JSON object containing per-package game prop overrides.
+         * Structure: {"com.package.name":{"BRAND":"samsung","MODEL":"Galaxy S24",...}}
+         * @hide
+         */
+        public static final String VOL_GAMEPROPS_CONFIG = "vol_gameprops_config";
 
         /** @hide */ public static String zenModeToString(int mode) {
             if (mode == ZEN_MODE_IMPORTANT_INTERRUPTIONS) return "ZEN_MODE_IMPORTANT_INTERRUPTIONS";

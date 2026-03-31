@@ -24,6 +24,7 @@ import android.app.ActivityThread;
 import android.app.Application;
 import android.app.TaskStackListener;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -43,12 +44,16 @@ import android.view.WindowManager;
 import com.android.internal.R;
 import com.android.internal.util.voltage.VoltageUtils;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -60,8 +65,17 @@ import java.util.regex.Matcher;
  */
 public final class PixelPropsUtils {
 
-    private static final String DISGUISE_PROPS_FOR_MUSIC_APP =
-            "persist.sys.disguise_props_for_music_app";
+    private static final String SPOOF_PIXEL_PROPS   = "vol_pphooks_enable";
+    public  static final String SPOOF_PIXEL_GMS     = "vol_pixelprops_gms";
+    public  static final String ENABLE_GAME_PROP_OPTIONS = "vol_gameprops_enabled";
+    private static final String DISGUISE_PROPS_FOR_MUSIC_APP = "vol_disguise_music";
+    private static final String SPOOF_SNAP          = "vol_snap_enable";
+    private static final String SPOOF_VENDING       = "vol_vending_enable";
+    private static final String SPOOF_GPHOTOS       = "vol_gphooks_enable";
+
+    public static final String PIF_CONFIG_KEY       = "vol_pif_config";
+    public static final String GAME_CONFIG_KEY      = "vol_gameprops_config";
+
     private static final String PACKAGE_ARCORE = "com.google.ar.core";
     private static final String PACKAGE_GMS = "com.google.android.gms";
     private static final String PACKAGE_FINSKY = "com.android.vending";
@@ -69,11 +83,12 @@ public final class PixelPropsUtils {
     private static final String PACKAGE_GOOGLE = "com.google";
     private static final String PACKAGE_NEXUS_LAUNCHER = "com.google.android.apps.nexuslauncher";
     private static final String PACKAGE_SI = "com.google.android.settings.intelligence";
-    private static final String SPOOF_PIXEL_PROPS = "persist.sys.pphooks.enable";
 
-    private static final String PROP_HOOKS = "persist.sys.pihooks_";
-    public static final String SPOOF_PIXEL_GMS = "persist.sys.pixelprops.gms";
-    public static final String ENABLE_GAME_PROP_OPTIONS = "persist.sys.gameprops.enabled";
+    private static final String[] GMS_SPOOF_KEYS = {
+        "BRAND", "DEVICE", "DEVICE_INITIAL_SDK_INT", "FINGERPRINT", "ID",
+        "MANUFACTURER", "MODEL", "PRODUCT", "RELEASE", "SECURITY_PATCH",
+        "TAGS", "TYPE"
+    };
 
     private static final String TAG = PixelPropsUtils.class.getSimpleName();
     private static final boolean DEBUG = false;
@@ -93,7 +108,6 @@ public final class PixelPropsUtils {
     private static Set<String> mLauncherPkgs;
     private static Set<String> mExemptedUidPkgs;
 
-    // Packages to Spoof as the most recent Pixel device
     private static final String[] packagesToChangeRecentPixel = {
             "com.amazon.avod.thirdpartyclient",
             "com.android.chrome",
@@ -144,17 +158,14 @@ public final class PixelPropsUtils {
         "com.tencent.qqmusic",
     };
 
-    private static final String[] GMS_SPOOF_KEYS = {
-        "BRAND", "DEVICE", "DEVICE_INITIAL_SDK_INT", "FINGERPRINT", "ID",
-        "MANUFACTURER", "MODEL", "PRODUCT", "RELEASE", "SECURITY_PATCH",
-        "TAGS", "TYPE"
-    };
-
     private static final ComponentName GMS_ADD_ACCOUNT_ACTIVITY = ComponentName.unflattenFromString(
             "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity");
 
     private static volatile boolean sIsGms, sIsExcluded;
     private static volatile String sProcessName;
+
+    private static volatile Map<String, String> sPiHooksCache = null;
+    private static volatile Map<String, Map<String, String>> sGamePropsCache = null;
 
     static {
         propsToKeep = new HashMap<>();
@@ -200,10 +211,80 @@ public final class PixelPropsUtils {
         propsToChangeMeizu.put("MODEL", "meizu 16th Plus");
     }
 
+    private static boolean getSecureBool(Context context, String key, boolean def) {
+        try {
+            return Settings.Secure.getInt(
+                    context.getContentResolver(), key, def ? 1 : 0) != 0;
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    /**
+     * Returns the parsed pihooks map from the Settings.Global JSON blob,
+     * caching the result for the process lifetime.
+     */
+    private static Map<String, String> getPiHooksMap(Context context) {
+        if (sPiHooksCache != null) return sPiHooksCache;
+        try {
+            String json = Settings.Global.getString(
+                    context.getContentResolver(), PIF_CONFIG_KEY);
+            if (json == null || json.isEmpty()) {
+                sPiHooksCache = Collections.emptyMap();
+                return sPiHooksCache;
+            }
+            JSONObject obj = new JSONObject(json);
+            Map<String, String> map = new HashMap<>();
+            for (Iterator<String> it = obj.keys(); it.hasNext(); ) {
+                String k = it.next();
+                map.put(k, obj.optString(k, ""));
+            }
+            sPiHooksCache = Collections.unmodifiableMap(map);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to parse pif config", e);
+            sPiHooksCache = Collections.emptyMap();
+        }
+        return sPiHooksCache;
+    }
+
+    /**
+     * Returns the parsed game props map from the Settings.Global JSON blob,
+     * caching the result for the process lifetime.
+     * Structure: { "com.package.name": { "BRAND": "...", "MODEL": "..." } }
+     */
+    private static Map<String, Map<String, String>> getGamePropsMap(Context context) {
+        if (sGamePropsCache != null) return sGamePropsCache;
+        try {
+            String json = Settings.Global.getString(
+                    context.getContentResolver(), GAME_CONFIG_KEY);
+            if (json == null || json.isEmpty()) {
+                sGamePropsCache = Collections.emptyMap();
+                return sGamePropsCache;
+            }
+            JSONObject root = new JSONObject(json);
+            Map<String, Map<String, String>> result = new HashMap<>();
+            for (Iterator<String> pkgIt = root.keys(); pkgIt.hasNext(); ) {
+                String pkg = pkgIt.next();
+                JSONObject propsObj = root.optJSONObject(pkg);
+                if (propsObj == null) continue;
+                Map<String, String> props = new HashMap<>();
+                for (Iterator<String> kIt = propsObj.keys(); kIt.hasNext(); ) {
+                    String k = kIt.next();
+                    props.put(k, propsObj.optString(k, ""));
+                }
+                result.put(pkg, Collections.unmodifiableMap(props));
+            }
+            sGamePropsCache = Collections.unmodifiableMap(result);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to parse game props config", e);
+            sGamePropsCache = Collections.emptyMap();
+        }
+        return sGamePropsCache;
+    }
+
     public static String getBuildID(String fingerprint) {
         Pattern pattern = Pattern.compile("([A-Za-z0-9]+\\.\\d+\\.\\d+\\.\\w+)");
         Matcher matcher = pattern.matcher(fingerprint);
-
         if (matcher.find()) {
             return matcher.group(1);
         }
@@ -256,11 +337,15 @@ public final class PixelPropsUtils {
         }
     }
 
-    public static void spoofBuildGms() {
-        if (!SystemProperties.getBoolean(SPOOF_PIXEL_GMS, true))
+    public static void spoofBuildGms(Context context) {
+        if (!getSecureBool(context, SPOOF_PIXEL_GMS, true))
             return;
+        Map<String, String> piHooks = getPiHooksMap(context);
         for (String key : GMS_SPOOF_KEYS) {
-            setPropValue(key, SystemProperties.get(PROP_HOOKS + key));
+            String value = piHooks.get(key);
+            if (value != null && !value.isEmpty()) {
+                setPropValue(key, value);
+            }
         }
     }
 
@@ -277,7 +362,7 @@ public final class PixelPropsUtils {
         boolean isPixelDevice = SystemProperties.get("ro.soc.manufacturer").equalsIgnoreCase("Google");
         boolean isMainlineDevice = isPixelDevice && model.matches("Pixel (8|9|10)[a-zA-Z ]*");
         boolean isTensorDevice = isPixelDevice && model.matches("Pixel (6|7|8|9|10)[a-zA-Z ]*");
-        boolean isPixelGmsEnabled = SystemProperties.getBoolean(SPOOF_PIXEL_GMS, true);
+        boolean isPixelGmsEnabled = getSecureBool(context, SPOOF_PIXEL_GMS, true);
         propsToChangeGeneric.forEach((k, v) -> setPropValue(k, v));
         if (packageName == null || processName == null || packageName.isEmpty()) {
             return;
@@ -286,26 +371,30 @@ public final class PixelPropsUtils {
             return;
         }
         if (packageName.equals(PACKAGE_FINSKY)) {
-            String[] finskyProps = {"FINGERPRINT", "SECURITY_PATCH", "DEVICE_INITIAL_SDK_INT"};
-            if (SystemProperties.getBoolean(SPOOF_PIXEL_GMS, true)) {
+            if (isPixelGmsEnabled) {
                 dlog("Spoofing a few props for: " + packageName);
+                Map<String, String> piHooks = getPiHooksMap(context);
+                String[] finskyProps = {"FINGERPRINT", "SECURITY_PATCH", "DEVICE_INITIAL_SDK_INT"};
                 for (String key : finskyProps) {
-                    setPropValue(key, SystemProperties.get(PROP_HOOKS + key));
+                    String value = piHooks.get(key);
+                    if (value != null && !value.isEmpty()) {
+                        setPropValue(key, value);
+                    }
                 }
             }
             return;
         }
-        setGameProps(packageName);
+        setGameProps(packageName, context);
         if (sIsGms) {
             if (shouldTryToCertifyDevice()) {
                 if (!isPixelGmsEnabled) {
                     return;
                 } else {
-                    spoofBuildGms();
+                    spoofBuildGms(context);
                 }
             }
         } else if (Arrays.asList(packagesToChangeRecentPixel).contains(packageName)) {
-            if (isMainlineDevice || !SystemProperties.getBoolean(SPOOF_PIXEL_PROPS, true)) {
+            if (isMainlineDevice || !getSecureBool(context, SPOOF_PIXEL_PROPS, true)) {
                 return;
             } else if (packageName.equals(PACKAGE_GMS) && !sIsGms) {
                 setPropValue("TIME", System.currentTimeMillis());
@@ -319,7 +408,7 @@ public final class PixelPropsUtils {
                         propsToChange.putAll(propsToChangePixel5a);
                     }
                 }
-            } else if (SystemProperties.getBoolean(SPOOF_PIXEL_PROPS, true)) {
+            } else if (getSecureBool(context, SPOOF_PIXEL_PROPS, true)) {
                 if (sIsTablet) {
                     propsToChange.putAll(propsToChangePixelTablet);
                 } else {
@@ -327,7 +416,7 @@ public final class PixelPropsUtils {
                 }
             }
         } else if (Arrays.asList(packagesToChangeMeizu).contains(packageName)) {
-            if (SystemProperties.getBoolean(DISGUISE_PROPS_FOR_MUSIC_APP, false)) {
+            if (getSecureBool(context, DISGUISE_PROPS_FOR_MUSIC_APP, false)) {
                 propsToChange.putAll(propsToChangeMeizu);
             }
         }
@@ -342,7 +431,6 @@ public final class PixelPropsUtils {
             dlog("Defining " + key + " prop for: " + packageName);
             setPropValue(key, value);
         }
-        // Set proper indexing fingerprint
         if (packageName.equals(PACKAGE_SI)) {
             setPropValue("FINGERPRINT", String.valueOf(Build.TIME));
             return;
@@ -351,7 +439,6 @@ public final class PixelPropsUtils {
             setPropValue("FINGERPRINT", sDeviceFingerprint);
             return;
         }
-        // Show correct model name on gms services
         if (packageName.toLowerCase().contains("com.google.android.gms")) {
             if (processName != null && processName.toLowerCase().contains("ui")) {
                 setPropValue("MODEL", sDeviceModel);
@@ -360,31 +447,22 @@ public final class PixelPropsUtils {
         }
     }
 
-    public static void setGameProps(String packageName) {
-        if (!SystemProperties.getBoolean(ENABLE_GAME_PROP_OPTIONS, false)) {
+    public static void setGameProps(String packageName, Context context) {
+        if (!getSecureBool(context, ENABLE_GAME_PROP_OPTIONS, false)) {
             return;
         }
         if (packageName == null || packageName.isEmpty()) {
             return;
         }
-        Map<String, String> gamePropsToChange = new HashMap<>();
-        String[] keys = {"BRAND", "DEVICE", "MANUFACTURER", "MODEL", "FINGERPRINT", "PRODUCT"};
-        for (String key : keys) {
-            String systemPropertyKey = "persist.sys.gameprops." + packageName + "." + key;
-            String value = SystemProperties.get(systemPropertyKey);
-            if (value != null && !value.isEmpty()) {
-                gamePropsToChange.put(key, value);
-                dlog("Got system property: " + systemPropertyKey + " = " + value);
-            }
+        Map<String, Map<String, String>> allGameProps = getGamePropsMap(context);
+        Map<String, String> gamePropsToChange = allGameProps.get(packageName);
+        if (gamePropsToChange == null || gamePropsToChange.isEmpty()) {
+            return;
         }
-        if (!gamePropsToChange.isEmpty()) {
-            dlog("Defining props for: " + packageName);
-            for (Map.Entry<String, String> prop : gamePropsToChange.entrySet()) {
-                String key = prop.getKey();
-                String value = prop.getValue();
-                dlog("Defining " + key + " prop for: " + packageName);
-                setPropValue(key, value);
-            }
+        dlog("Defining game props for: " + packageName);
+        for (Map.Entry<String, String> prop : gamePropsToChange.entrySet()) {
+            dlog("Defining " + prop.getKey() + " prop for: " + packageName);
+            setPropValue(prop.getKey(), prop.getValue());
         }
     }
 
@@ -443,7 +521,7 @@ public final class PixelPropsUtils {
             field.set(null, value);
             field.setAccessible(false);
         } catch (NoSuchFieldException | IllegalAccessException e) {
-            Log.e(TAG, "Failed to set version field " + key, e);
+            Log.e(TAG, "Failed to spoof Build." + key, e);
         }
     }
 
@@ -581,47 +659,35 @@ public final class PixelPropsUtils {
                 || isPackageGoogle(context.getPackageManager().getNameForUid(callingUid));
     }
 
-    // Whitelist of package names to bypass FGS type validation
     public static boolean shouldBypassFGSValidation(String packageName) {
-        // Check if the app is whitelisted
         if (Arrays.asList(getStringArrayResSafely(R.array.config_fgsTypeValidationBypassPackages))
                 .contains(packageName)) {
-            dlog(
-                    "shouldBypassFGSValidation: "
-                            + "Bypassing FGS type validation for whitelisted app: "
-                            + packageName);
+            dlog("shouldBypassFGSValidation: Bypassing FGS type validation for whitelisted app: "
+                    + packageName);
             return true;
         }
         return false;
     }
 
-    // Whitelist of package names to bypass alarm manager validation
     public static boolean shouldBypassAlarmManagerValidation(String packageName) {
-        // Check if the app is whitelisted
         if (Arrays.asList(
                         getStringArrayResSafely(
                                 R.array.config_alarmManagerValidationBypassPackages))
                 .contains(packageName)) {
-            dlog(
-                    "shouldBypassAlarmManagerValidation: "
-                            + "Bypassing alarm manager validation for whitelisted app: "
-                            + packageName);
+            dlog("shouldBypassAlarmManagerValidation: Bypassing alarm manager validation for whitelisted app: "
+                    + packageName);
             return true;
         }
         return false;
     }
 
-    // Whitelist of package names to bypass broadcast reciever validation
     public static boolean shouldBypassBroadcastReceiverValidation(String packageName) {
-        // Check if the app is whitelisted
         if (Arrays.asList(
                         getStringArrayResSafely(
                                 R.array.config_broadcaseReceiverValidationBypassPackages))
                 .contains(packageName)) {
-            dlog(
-                    "shouldBypassBroadcastReceiverValidation: "
-                            + "Bypassing broadcast receiver validation for whitelisted app: "
-                            + packageName);
+            dlog("shouldBypassBroadcastReceiverValidation: Bypassing broadcast receiver validation for whitelisted app: "
+                    + packageName);
             return true;
         }
         return false;
