@@ -25,8 +25,10 @@ import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.Rect
 import android.os.Bundle
+import android.os.SystemClock
 import android.os.Trace
 import android.os.UserHandle
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -34,6 +36,9 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.VisibleForTesting
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -68,6 +73,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.approachLayout
 import androidx.compose.ui.layout.layout
@@ -180,11 +186,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import android.provider.Settings
 
 @SuppressLint("ValidFragment")
 class QSFragmentCompose
@@ -288,6 +294,7 @@ constructor(
 
     @Composable
     private fun Content(modifier: Modifier = Modifier) {
+        val qsOpenSettleScale = rememberQsOpenSettleScale(viewModel)
         PlatformTheme(isDarkTheme = if (notificationShadeBlur()) isSystemInDarkTheme() else true) {
             ProvideShortcutHelperIndication(interactionsConfig = interactionsConfig()) {
                 Box(
@@ -302,7 +309,12 @@ constructor(
                                     }
                                 }
                             }
-                            .graphicsLayer { alpha = viewModel.viewAlpha }
+                            .graphicsLayer {
+                                alpha = viewModel.viewAlpha
+                                scaleX = qsOpenSettleScale
+                                scaleY = qsOpenSettleScale
+                                transformOrigin = TransformOrigin(0.5f, 0f)
+                            }
                             .thenIf(!Flags.notificationShadeBlur()) {
                                 Modifier.offset {
                                     IntOffset(
@@ -321,6 +333,99 @@ constructor(
                 }
             }
         }
+    }
+
+    @Composable
+    private fun rememberQsOpenSettleScale(viewModel: QSFragmentComposeViewModel): Float {
+        val settleScale = remember { Animatable(1f) }
+        LaunchedEffect(viewModel) {
+            var previousProgress = viewModel.expansionState.progress
+            var previousTimestampNanos = 0L
+            var wasFullyExpanded = viewModel.isQsFullyExpanded
+            var lastPositiveVelocity = 0f
+            var settleJob: kotlinx.coroutines.Job? = null
+
+            snapshotFlow {
+                    QsRevealMotionSnapshot(
+                        progress = viewModel.expansionState.progress,
+                        isFullyExpanded = viewModel.isQsFullyExpanded,
+                        isEditing = viewModel.isEditing,
+                        isOverscrollSuppressed =
+                            Flags.noExpansionOnOverscroll() && viewModel.isStackScrollerOverscrolling,
+                    )
+                }
+                .collect { snapshot ->
+                    val now = SystemClock.elapsedRealtimeNanos()
+                    if (previousTimestampNanos != 0L) {
+                        val estimatedVelocity =
+                            calculateQsRevealProgressVelocity(
+                                previousProgress = previousProgress,
+                                currentProgress = snapshot.progress,
+                                deltaNanos = now - previousTimestampNanos,
+                            )
+                        if (estimatedVelocity > 0f) {
+                            lastPositiveVelocity = estimatedVelocity
+                        } else if (
+                            snapshot.progress < previousProgress ||
+                                snapshot.isOverscrollSuppressed ||
+                                snapshot.isEditing
+                        ) {
+                            lastPositiveVelocity = 0f
+                        }
+                    }
+
+                    if (
+                        shouldTriggerQsFullOpenSettle(
+                            wasFullyExpanded = wasFullyExpanded,
+                            isFullyExpanded = snapshot.isFullyExpanded,
+                            estimatedOpenVelocity = lastPositiveVelocity,
+                            isEditing = snapshot.isEditing,
+                            isOverscrollSuppressed = snapshot.isOverscrollSuppressed,
+                        )
+                    ) {
+                        val peakScale = calculateQsOpenSettlePeakScale(lastPositiveVelocity)
+                        settleJob?.cancel()
+                        settleJob =
+                            launch {
+                                settleScale.snapTo(1f)
+                                settleScale.animateTo(
+                                    targetValue = peakScale,
+                                    animationSpec =
+                                        tween(
+                                            durationMillis = QS_OPEN_SETTLE_SCALE_UP_DURATION_MILLIS,
+                                            easing = LinearOutSlowInEasing,
+                                        ),
+                                )
+                                settleScale.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec =
+                                        tween(
+                                            durationMillis =
+                                                QS_OPEN_SETTLE_SCALE_DOWN_DURATION_MILLIS,
+                                            easing = FastOutSlowInEasing,
+                                        ),
+                                )
+                            }
+                        lastPositiveVelocity = 0f
+                    } else if (
+                        !snapshot.isFullyExpanded ||
+                            snapshot.isEditing ||
+                            snapshot.isOverscrollSuppressed
+                    ) {
+                        lastPositiveVelocity = 0f
+                        settleJob?.cancel()
+                        settleJob = null
+                        if (settleScale.value != 1f) {
+                            settleScale.snapTo(1f)
+                        }
+                    }
+
+                    previousProgress = snapshot.progress
+                    previousTimestampNanos = now
+                    wasFullyExpanded = snapshot.isFullyExpanded
+                }
+        }
+        return settleScale.value
     }
 
     /**
@@ -1693,3 +1798,57 @@ private data class QsBrightnessSettings(
     val sliderAtTop: Boolean,
     val showSlider: Int,
 )
+
+private data class QsRevealMotionSnapshot(
+    val progress: Float,
+    val isFullyExpanded: Boolean,
+    val isEditing: Boolean,
+    val isOverscrollSuppressed: Boolean,
+)
+
+private const val QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY = 1.25f
+private const val QS_OPEN_SETTLE_MAX_PROGRESS_VELOCITY = 4.5f
+private const val QS_OPEN_SETTLE_MAX_SCALE = 1.02f
+private const val QS_OPEN_SETTLE_SCALE_UP_DURATION_MILLIS = 90
+private const val QS_OPEN_SETTLE_SCALE_DOWN_DURATION_MILLIS = 180
+
+@VisibleForTesting
+internal fun calculateQsRevealProgressVelocity(
+    previousProgress: Float,
+    currentProgress: Float,
+    deltaNanos: Long,
+): Float {
+    if (deltaNanos <= 0L) {
+        return 0f
+    }
+    return (currentProgress - previousProgress) / (deltaNanos / 1_000_000_000f)
+}
+
+@VisibleForTesting
+internal fun calculateQsOpenSettlePeakScale(estimatedOpenVelocity: Float): Float {
+    if (estimatedOpenVelocity <= QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY) {
+        return 1f
+    }
+    val normalizedVelocity =
+        (
+            (estimatedOpenVelocity - QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY) /
+                (QS_OPEN_SETTLE_MAX_PROGRESS_VELOCITY - QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY)
+        )
+            .coerceIn(0f, 1f)
+    return 1f + normalizedVelocity * (QS_OPEN_SETTLE_MAX_SCALE - 1f)
+}
+
+@VisibleForTesting
+internal fun shouldTriggerQsFullOpenSettle(
+    wasFullyExpanded: Boolean,
+    isFullyExpanded: Boolean,
+    estimatedOpenVelocity: Float,
+    isEditing: Boolean,
+    isOverscrollSuppressed: Boolean,
+): Boolean {
+    return !wasFullyExpanded &&
+        isFullyExpanded &&
+        !isEditing &&
+        !isOverscrollSuppressed &&
+        calculateQsOpenSettlePeakScale(estimatedOpenVelocity) > 1f
+}

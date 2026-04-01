@@ -95,6 +95,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlin.math.pow
 
 class QSFragmentComposeViewModel
 @AssistedInject
@@ -235,6 +236,10 @@ constructor(
 
     var isPanelExpanded by mutableStateOf(false)
 
+    private val visualQsExpansionProgress by derivedStateOf {
+        interpolateQsRevealProgress(qsExpansion.coerceIn(0f, 1f))
+    }
+
     val expansionState by derivedStateOf {
         if (forceQs) {
             QSExpansionState(1f)
@@ -242,7 +247,7 @@ constructor(
             QSExpansionState(
                 if (Flags.noExpansionOnOverscroll() && isStackScrollerOverscrolling) 0f
                 else
-                    qsExpansion.coerceIn(
+                    visualQsExpansionProgress.coerceIn(
                         // Only apply early expansion if we are not collapsing QQS, measured by
                         // panelExpansionFraction and squishinessFraction
                         minimumValue =
@@ -656,6 +661,15 @@ constructor(
 
 private fun Float.constrainSquishiness(): Float {
     return (0.1f + this * 0.9f).coerceIn(0f, 1f)
+}
+
+@VisibleForTesting
+internal fun interpolateQsRevealProgress(rawProgress: Float): Float {
+    val clampedProgress = rawProgress.coerceIn(0f, 1f)
+    if (clampedProgress <= 0f || clampedProgress >= 1f) {
+        return clampedProgress
+    }
+    return 1f - (1f - clampedProgress).pow(1.2f)
 }
 
 private val SHORT_PARALLAX_AMOUNT = 0.1f
