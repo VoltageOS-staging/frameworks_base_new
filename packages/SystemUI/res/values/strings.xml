@@ -2726,6 +2726,8 @@
 
     <!-- The tile in quick settings is unavailable. [CHAR LIMIT=32] -->
     <string name="tile_unavailable">Unavailable</string>
+    <string name="quick_settings_network_mode_label">Network mode</string>
+    <string name="qs_network_mode_applying">Applying...</string>
 
     <!-- Accessibility text for the click action on a tile that is disabled by policy. This will
          be used following "Double-tap to..." [CHAR LIMIT=NONE] -->
@@ -4583,3 +4585,4 @@
     <!-- Description for the Ambient Cue accessibility action label for expanding. [CHAR LIMIT=NONE] -->
     <string name="ambient_cue_expand_action">expand</string>
 </resources>
+

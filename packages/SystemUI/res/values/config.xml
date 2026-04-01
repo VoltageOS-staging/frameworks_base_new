@@ -102,12 +102,12 @@
 
     <!-- The default tiles to display in QuickSettings -->
     <string name="quick_settings_tiles_default" translatable="false">
-        internet,bt,flashlight,dnd,alarm,airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle
+        internet,networkmode,bt,flashlight,dnd,alarm,airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle
     </string>
 
     <!-- The default tiles to display in QuickSettings with the new UI -->
     <string name="quick_settings_tiles_new_default" translatable="false">
-        internet,bt,dnd,cast,flashlight,airplane,rotation,wallet,alarm,controls,screenrecord,battery
+        internet,networkmode,bt,dnd,cast,flashlight,airplane,rotation,wallet,alarm,controls,screenrecord,battery
     </string>
 
     <!-- The class path of the Safety Quick Settings Tile -->
@@ -120,7 +120,7 @@
 
     <!-- Tiles native to System UI. Order should match "quick_settings_tiles_default" -->
     <string name="quick_settings_tiles_stock" translatable="false">
-        internet,wifilegacy,celllegacy,bt,flashlight,dnd,modes_dnd,alarm,airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,nfc,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,qr_code_scanner,onehanded,color_correction,dream,font_scaling,record_issue,hearing_devices,notes,desktopeffects,refresh_rate,heads_up,sync,ambient_display,sound,usb_tether,aod,caffeine,cpuinfo,fpsinfo,vpn_tethering,compass,vpn,volume_panel,screenshot,powershare,sleep_mode,dataswitch,smartpixels,dns,volume,notif_suppress,animation_scale,nirvana
+        internet,wifilegacy,celllegacy,bt,flashlight,dnd,modes_dnd,alarm,airplane,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,nfc,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,qr_code_scanner,onehanded,color_correction,dream,font_scaling,record_issue,hearing_devices,notes,desktopeffects,refresh_rate,heads_up,sync,ambient_display,sound,networkmode,usb_tether,aod,caffeine,cpuinfo,fpsinfo,vpn_tethering,compass,vpn,volume_panel,screenshot,powershare,sleep_mode,dataswitch,smartpixels,dns,volume,notif_suppress,animation_scale,nirvana
     </string>
 
     <!-- The tiles to display in QuickSettings -->
@@ -1185,3 +1185,4 @@
     <!-- Indicates whether the tapping to open qs panel is supported -->
     <bool name="config_statusBarTapToExpandShade">false</bool>
 </resources>
+

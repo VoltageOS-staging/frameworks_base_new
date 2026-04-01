@@ -95,6 +95,7 @@ import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.TileHeight
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelMoreDetails
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CommonTileDefaults.longPressLabelSettings
+import com.android.systemui.qs.tiles.impl.networkmode.QSTileNetworkMode
 import com.android.systemui.qs.tiles.impl.ringer.QSTileRingerSlider
 import com.android.systemui.qs.panels.ui.viewmodel.AccessibilityUiState
 import com.android.systemui.qs.panels.ui.viewmodel.BounceableTileViewModel
@@ -202,9 +203,17 @@ fun ContentScope.Tile(
                 tileHapticsViewModelFactoryProvider.getHapticsViewModelFactory()?.create(tile)
             }
 
-        if (tile.spec.spec == "sound" && !iconOnly) {
-            QSTileRingerSlider()
-            return@trace
+        if (!iconOnly) {
+            when (tile.spec.spec) {
+                "sound" -> {
+                    QSTileRingerSlider()
+                    return@trace
+                }
+                "networkmode" -> {
+                    QSTileNetworkMode()
+                    return@trace
+                }
+            }
         }
         
         // TODO(b/361789146): Draw the shapes instead of clipping
@@ -652,3 +661,4 @@ private fun resources(): Resources {
     LocalConfiguration.current
     return LocalResources.current
 }
+

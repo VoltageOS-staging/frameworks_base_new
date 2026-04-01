@@ -43,6 +43,7 @@ import com.android.systemui.qs.tiles.SoundTile
 import com.android.systemui.qs.tiles.VolumeQSTile
 import com.android.systemui.qs.tiles.UsbTetherTile
 import com.android.systemui.qs.tiles.NirvanaTile
+import com.android.systemui.qs.tiles.NetworkModeTile
 import com.android.systemui.qs.tiles.VPNTetheringTile
 import com.android.systemui.qs.tiles.VolumeTile
 import com.android.systemui.qs.tiles.VpnTile
@@ -107,6 +108,13 @@ interface VoltageModule {
     @IntoMap
     @StringKey(DataSwitchTile.TILE_SPEC)
     fun bindDataSwitchTile(dataSwitchTile: DataSwitchTile): QSTileImpl<*>
+
+    
+    /** Inject NetworkModeTile into tileMap in QSModule */
+    @Binds
+    @IntoMap
+    @StringKey(NetworkModeTile.TILE_SPEC)
+    fun bindNetworkModeTile(networkModeTile: NetworkModeTile): QSTileImpl<*>
 
     /** Inject HeadsUpTile into tileMap in QSModule */
     @Binds
@@ -282,6 +290,22 @@ interface VoltageModule {
                 uiConfig = QSTileUIConfig.Resource(
                     iconRes = R.drawable.ic_qs_data_switch_0,
                     labelRes = R.string.qs_data_switch_label
+                ),
+                instanceId = uiEventLogger.getNewInstanceId(),
+                category = TileCategory.CONNECTIVITY
+            )
+        }
+
+        
+        @Provides
+        @IntoMap
+        @StringKey(NetworkModeTile.TILE_SPEC)
+        fun provideNetworkModeConfig(uiEventLogger: QsEventLogger): QSTileConfig {
+            return QSTileConfig(
+                tileSpec = TileSpec.create(NetworkModeTile.TILE_SPEC),
+                uiConfig = QSTileUIConfig.Resource(
+                    iconRes = R.drawable.ic_qs_network_mode,
+                    labelRes = R.string.quick_settings_network_mode_label
                 ),
                 instanceId = uiEventLogger.getNewInstanceId(),
                 category = TileCategory.CONNECTIVITY
@@ -604,3 +628,4 @@ interface VoltageModule {
         }
     }
 }
+
