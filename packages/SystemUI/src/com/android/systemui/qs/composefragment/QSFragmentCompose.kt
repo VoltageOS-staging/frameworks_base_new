@@ -72,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -85,6 +86,7 @@ import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -191,6 +193,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.math.pow
 
 @SuppressLint("ValidFragment")
 class QSFragmentCompose
@@ -294,7 +297,8 @@ constructor(
 
     @Composable
     private fun Content(modifier: Modifier = Modifier) {
-        val qsOpenSettleScale = rememberQsOpenSettleScale(viewModel)
+        val qsOpenSettleMotion = rememberQsOpenSettleMotion(viewModel)
+        val qsRevealLayers = rememberQsRevealLayers(viewModel)
         PlatformTheme(isDarkTheme = if (notificationShadeBlur()) isSystemInDarkTheme() else true) {
             ProvideShortcutHelperIndication(interactionsConfig = interactionsConfig()) {
                 Box(
@@ -311,8 +315,11 @@ constructor(
                             }
                             .graphicsLayer {
                                 alpha = viewModel.viewAlpha
-                                scaleX = qsOpenSettleScale
-                                scaleY = qsOpenSettleScale
+                                scaleX = qsOpenSettleMotion.scale
+                                scaleY = qsOpenSettleMotion.scale
+                                translationY =
+                                    qsRevealLayers.panelTranslationY +
+                                        qsOpenSettleMotion.translationY
                                 transformOrigin = TransformOrigin(0.5f, 0f)
                             }
                             .thenIf(!Flags.notificationShadeBlur()) {
@@ -336,8 +343,17 @@ constructor(
     }
 
     @Composable
-    private fun rememberQsOpenSettleScale(viewModel: QSFragmentComposeViewModel): Float {
+    private fun rememberQsOpenSettleMotion(
+        viewModel: QSFragmentComposeViewModel
+    ): QsOpenSettleMotion {
         val settleScale = remember { Animatable(1f) }
+        val density = LocalDensity.current
+        val settleTranslationY =
+            remember(density) {
+                Animatable(0f)
+            }
+        val maxSettleTranslationY =
+            with(density) { QS_OPEN_SETTLE_MAX_TRANSLATION_DP.dp.toPx() }
         LaunchedEffect(viewModel) {
             var previousProgress = viewModel.expansionState.progress
             var previousTimestampNanos = 0L
@@ -384,27 +400,58 @@ constructor(
                         )
                     ) {
                         val peakScale = calculateQsOpenSettlePeakScale(lastPositiveVelocity)
+                        val peakTranslationY =
+                            calculateQsOpenSettlePeakTranslationY(
+                                estimatedOpenVelocity = lastPositiveVelocity,
+                                maxTranslationY = maxSettleTranslationY,
+                            )
                         settleJob?.cancel()
                         settleJob =
                             launch {
                                 settleScale.snapTo(1f)
-                                settleScale.animateTo(
-                                    targetValue = peakScale,
-                                    animationSpec =
-                                        tween(
-                                            durationMillis = QS_OPEN_SETTLE_SCALE_UP_DURATION_MILLIS,
-                                            easing = LinearOutSlowInEasing,
-                                        ),
-                                )
-                                settleScale.animateTo(
-                                    targetValue = 1f,
-                                    animationSpec =
-                                        tween(
-                                            durationMillis =
-                                                QS_OPEN_SETTLE_SCALE_DOWN_DURATION_MILLIS,
-                                            easing = FastOutSlowInEasing,
-                                        ),
-                                )
+                                settleTranslationY.snapTo(0f)
+                                coroutineScope {
+                                    launch {
+                                        settleScale.animateTo(
+                                            targetValue = peakScale,
+                                            animationSpec =
+                                                tween(
+                                                    durationMillis =
+                                                        QS_OPEN_SETTLE_SCALE_UP_DURATION_MILLIS,
+                                                    easing = LinearOutSlowInEasing,
+                                                ),
+                                        )
+                                        settleScale.animateTo(
+                                            targetValue = 1f,
+                                            animationSpec =
+                                                tween(
+                                                    durationMillis =
+                                                        QS_OPEN_SETTLE_SCALE_DOWN_DURATION_MILLIS,
+                                                    easing = FastOutSlowInEasing,
+                                                ),
+                                        )
+                                    }
+                                    launch {
+                                        settleTranslationY.animateTo(
+                                            targetValue = peakTranslationY,
+                                            animationSpec =
+                                                tween(
+                                                    durationMillis =
+                                                        QS_OPEN_SETTLE_SCALE_UP_DURATION_MILLIS,
+                                                    easing = LinearOutSlowInEasing,
+                                                ),
+                                        )
+                                        settleTranslationY.animateTo(
+                                            targetValue = 0f,
+                                            animationSpec =
+                                                tween(
+                                                    durationMillis =
+                                                        QS_OPEN_SETTLE_SCALE_DOWN_DURATION_MILLIS,
+                                                    easing = FastOutSlowInEasing,
+                                                ),
+                                        )
+                                    }
+                                }
                             }
                         lastPositiveVelocity = 0f
                     } else if (
@@ -415,8 +462,9 @@ constructor(
                         lastPositiveVelocity = 0f
                         settleJob?.cancel()
                         settleJob = null
-                        if (settleScale.value != 1f) {
+                        if (settleScale.value != 1f || settleTranslationY.value != 0f) {
                             settleScale.snapTo(1f)
+                            settleTranslationY.snapTo(0f)
                         }
                     }
 
@@ -425,7 +473,31 @@ constructor(
                     wasFullyExpanded = snapshot.isFullyExpanded
                 }
         }
-        return settleScale.value
+        return QsOpenSettleMotion(
+            scale = settleScale.value,
+            translationY = settleTranslationY.value,
+        )
+    }
+
+    @Composable
+    private fun rememberQsRevealLayers(viewModel: QSFragmentComposeViewModel): QsRevealLayers {
+        val density = LocalDensity.current
+        val tileEntranceOffsetY = with(density) { QS_REVEAL_TILES_TRANSLATION_Y_DP.dp.toPx() }
+        val sliderEntranceOffsetX = with(density) { QS_REVEAL_SLIDER_TRANSLATION_X_DP.dp.toPx() }
+        val footerEntranceOffsetY = with(density) { QS_REVEAL_FOOTER_TRANSLATION_Y_DP.dp.toPx() }
+        return remember(
+            viewModel.expansionState.progress,
+            tileEntranceOffsetY,
+            sliderEntranceOffsetX,
+            footerEntranceOffsetY,
+        ) {
+            calculateQsRevealLayers(
+                progress = viewModel.expansionState.progress,
+                tileEntranceOffsetY = tileEntranceOffsetY,
+                sliderEntranceOffsetX = sliderEntranceOffsetX,
+                footerEntranceOffsetY = footerEntranceOffsetY,
+            )
+        }
     }
 
     /**
@@ -927,6 +999,7 @@ constructor(
 
     @Composable
     private fun ContentScope.QuickSettingsElement(modifier: Modifier = Modifier) {
+        val qsRevealLayers = rememberQsRevealLayers(viewModel)
         val qqsPadding = viewModel.qqsHeaderHeight
         val qsExtraPadding = dimensionResource(R.dimen.qs_panel_padding_top)
         Column(
@@ -980,12 +1053,32 @@ constructor(
                         )
                         val BrightnessSlider: @Composable () -> Unit = {
                             Element(Elements.BrightnessSlider, modifier = modifier) {
-                                BrightnessSlider(viewModel, layoutState)
+                                Box(
+                                    modifier =
+                                        Modifier.fillMaxWidth()
+                                            .clipToBounds()
+                                            .graphicsLayer {
+                                                alpha = qsRevealLayers.sliderAlpha
+                                                translationX =
+                                                    qsRevealLayers.sliderTranslationX
+                                            }
+                                ) {
+                                    BrightnessSlider(viewModel, layoutState)
+                                }
                             }
                         }
                         val TileGrid =
                             @Composable {
-                                Box {
+                                Box(
+                                    modifier =
+                                        Modifier.graphicsLayer {
+                                            alpha = qsRevealLayers.tileAlpha
+                                            scaleX = qsRevealLayers.tileScale
+                                            scaleY = qsRevealLayers.tileScale
+                                            translationY = qsRevealLayers.tileTranslationY
+                                            transformOrigin = TransformOrigin(0.5f, 0f)
+                                        }
+                                ) {
                                     GridAnchor()
 
                                     // When always compose is false, this will always be true, and
@@ -1009,6 +1102,7 @@ constructor(
                                         viewModel = containerViewModel.tileGridViewModel,
                                         modifier = Modifier.fillMaxWidth(),
                                         listening = isListening,
+                                        enableRevealEffect = true,
                                     )
                                 }
                             }
@@ -1055,7 +1149,15 @@ constructor(
                         Elements.FooterActions,
                         Modifier.sysuiResTag(ResIdTags.qsFooterActions),
                     ) {
-                        FooterActions(viewModel = viewModel.footerActionsViewModel)
+                        Box(
+                            modifier =
+                                Modifier.graphicsLayer {
+                                    alpha = qsRevealLayers.footerAlpha
+                                    translationY = qsRevealLayers.footerTranslationY
+                                }
+                        ) {
+                            FooterActions(viewModel = viewModel.footerActionsViewModel)
+                        }
                     }
                 }
             }
@@ -1806,11 +1908,31 @@ private data class QsRevealMotionSnapshot(
     val isOverscrollSuppressed: Boolean,
 )
 
+private data class QsOpenSettleMotion(
+    val scale: Float,
+    val translationY: Float,
+)
+
+internal data class QsRevealLayers(
+    val panelTranslationY: Float,
+    val tileAlpha: Float,
+    val tileScale: Float,
+    val tileTranslationY: Float,
+    val sliderAlpha: Float,
+    val sliderTranslationX: Float,
+    val footerAlpha: Float,
+    val footerTranslationY: Float,
+)
+
 private const val QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY = 1.25f
 private const val QS_OPEN_SETTLE_MAX_PROGRESS_VELOCITY = 4.5f
 private const val QS_OPEN_SETTLE_MAX_SCALE = 1.02f
+private const val QS_OPEN_SETTLE_MAX_TRANSLATION_DP = 8f
 private const val QS_OPEN_SETTLE_SCALE_UP_DURATION_MILLIS = 90
 private const val QS_OPEN_SETTLE_SCALE_DOWN_DURATION_MILLIS = 180
+private const val QS_REVEAL_TILES_TRANSLATION_Y_DP = 16f
+private const val QS_REVEAL_SLIDER_TRANSLATION_X_DP = 20f
+private const val QS_REVEAL_FOOTER_TRANSLATION_Y_DP = 12f
 
 @VisibleForTesting
 internal fun calculateQsRevealProgressVelocity(
@@ -1839,6 +1961,23 @@ internal fun calculateQsOpenSettlePeakScale(estimatedOpenVelocity: Float): Float
 }
 
 @VisibleForTesting
+internal fun calculateQsOpenSettlePeakTranslationY(
+    estimatedOpenVelocity: Float,
+    maxTranslationY: Float,
+): Float {
+    if (estimatedOpenVelocity <= QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY) {
+        return 0f
+    }
+    val normalizedVelocity =
+        (
+            (estimatedOpenVelocity - QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY) /
+                (QS_OPEN_SETTLE_MAX_PROGRESS_VELOCITY - QS_OPEN_SETTLE_MIN_PROGRESS_VELOCITY)
+        )
+            .coerceIn(0f, 1f)
+    return normalizedVelocity * maxTranslationY
+}
+
+@VisibleForTesting
 internal fun shouldTriggerQsFullOpenSettle(
     wasFullyExpanded: Boolean,
     isFullyExpanded: Boolean,
@@ -1851,4 +1990,57 @@ internal fun shouldTriggerQsFullOpenSettle(
         !isEditing &&
         !isOverscrollSuppressed &&
         calculateQsOpenSettlePeakScale(estimatedOpenVelocity) > 1f
+}
+
+@VisibleForTesting
+internal fun calculateQsRevealLayers(
+    progress: Float,
+    tileEntranceOffsetY: Float,
+    sliderEntranceOffsetX: Float,
+    footerEntranceOffsetY: Float,
+): QsRevealLayers {
+    val tileProgress = progress.stageProgress(start = 0.16f, end = 0.72f)
+    val sliderProgress = progress.stageProgress(start = 0.42f, end = 0.84f)
+    val footerProgress = progress.stageProgress(start = 0.68f, end = 0.94f)
+
+    return QsRevealLayers(
+        panelTranslationY = 0f,
+        tileAlpha = tileProgress.easeOutCubic(),
+        tileScale = lerp(start = 0.9f, stop = 1f, fraction = tileProgress.easeOutBack()),
+        tileTranslationY =
+            lerp(start = tileEntranceOffsetY, stop = 0f, fraction = tileProgress.easeOutCubic()),
+        sliderAlpha = sliderProgress.easeOutCubic(),
+        sliderTranslationX =
+            lerp(
+                start = -sliderEntranceOffsetX,
+                stop = 0f,
+                fraction = sliderProgress.easeOutBack(),
+            ),
+        footerAlpha = footerProgress.easeOutCubic(),
+        footerTranslationY =
+            lerp(
+                start = footerEntranceOffsetY,
+                stop = 0f,
+                fraction = footerProgress.easeOutCubic(),
+            ),
+    )
+}
+
+private fun Float.stageProgress(start: Float, end: Float): Float {
+    if (end <= start) return if (this >= end) 1f else 0f
+    return ((this - start) / (end - start)).coerceIn(0f, 1f)
+}
+
+private fun Float.easeOutCubic(): Float {
+    val inverse = 1f - this
+    return 1f - inverse * inverse * inverse
+}
+
+private fun Float.easeOutBack(overshoot: Float = 1.15f): Float {
+    val shiftedProgress = this - 1f
+    return 1f + (overshoot + 1f) * shiftedProgress.pow(3) + overshoot * shiftedProgress.pow(2)
+}
+
+private fun lerp(start: Float, stop: Float, fraction: Float): Float {
+    return start + (stop - start) * fraction
 }
