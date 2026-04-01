@@ -3,7 +3,6 @@ package com.android.systemui.qs.tiles
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import android.service.quicksettings.Tile
 import com.android.internal.logging.MetricsLogger
 import com.android.internal.logging.nano.MetricsProto
@@ -49,9 +48,7 @@ class NetworkModeTile @Inject constructor(
     private val listener = NetworkModeController.Listener { refreshState() }
 
     override fun newTileState(): BooleanState {
-        return BooleanState().apply {
-            handlesLongClick = true
-        }
+        return BooleanState()
     }
 
     override fun handleSetListening(listening: Boolean) {
@@ -71,36 +68,50 @@ class NetworkModeTile @Inject constructor(
         }
     }
 
+    override fun handleLongClick(expandable: Expandable?) {
+        if (controller.switchDefaultDataSim()) {
+            refreshState()
+        }
+    }
+
     override fun handleUpdateState(state: BooleanState, arg: Any?) {
         val tileState = controller.state.value
         val summarySim = tileState.defaultDataSimState
 
         state.label = mContext.getString(R.string.quick_settings_network_mode_label)
         state.icon = maybeLoadResourceIcon(R.drawable.ic_qs_network_mode)
-        state.handlesLongClick = true
+        state.handlesLongClick = tileState.canSwitchDefaultDataSim
 
         if (!tileState.isAvailable || summarySim == null) {
             state.value = false
             state.secondaryLabel = mContext.getString(R.string.tile_unavailable)
+            state.stateDescription = state.secondaryLabel
+            state.contentDescription = "${state.label}, ${state.secondaryLabel}"
             state.state = Tile.STATE_UNAVAILABLE
             return
         }
 
-        state.value = true
-        state.secondaryLabel =
+        val visibleModeLabel =
             when {
                 summarySim.isLoading -> mContext.getString(R.string.qs_network_mode_applying)
-                summarySim.displayMode == null -> summarySim.simLabel
-                else -> "${summarySim.simLabel} ${summarySim.displayMode.label}"
+                summarySim.displayMode != null -> summarySim.displayMode.label
+                else -> mContext.getString(R.string.tile_unavailable)
             }
-        state.stateDescription = state.secondaryLabel
-        state.contentDescription = "${state.label}, ${summarySim.carrierName}, ${state.secondaryLabel}"
+        val spokenModeLabel =
+            when {
+                summarySim.isLoading -> mContext.getString(R.string.qs_network_mode_applying)
+                summarySim.displayMode != null -> "${summarySim.simLabel} ${summarySim.displayMode.label}"
+                else -> summarySim.simLabel
+            }
+
+        state.value = true
+        state.secondaryLabel = visibleModeLabel
+        state.stateDescription = spokenModeLabel
+        state.contentDescription = "${state.label}, ${summarySim.simLabel}, ${summarySim.carrierName}, ${spokenModeLabel}"
         state.state = if (summarySim.displayMode == NetworkMode.MODE_3G) Tile.STATE_INACTIVE else Tile.STATE_ACTIVE
     }
 
-    override fun getLongClickIntent(): Intent {
-        return Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS)
-    }
+    override fun getLongClickIntent(): Intent? = null
 
     override fun getTileLabel(): CharSequence {
         return mContext.getString(R.string.quick_settings_network_mode_label)

@@ -132,6 +132,35 @@ class NetworkModeController private constructor(context: Context) {
         return requestAdjacentMode(subId, 1)
     }
 
+    fun switchDefaultDataSim(): Boolean {
+        val simStates = _state.value.simStates
+        if (simStates.size < 2) return false
+
+        val currentSubId =
+            _state.value.defaultDataSubId.takeIf { defaultSubId ->
+                simStates.any { it.subId == defaultSubId }
+            } ?: simStates.first().subId
+        val currentIndex = simStates.indexOfFirst { it.subId == currentSubId }.takeIf { it >= 0 } ?: 0
+        val nextSimState = simStates[(currentIndex + 1) % simStates.size]
+
+        emitState(
+            _state.value.copy(
+                defaultDataSubId = nextSimState.subId,
+                simStates =
+                    _state.value.simStates.map { sim ->
+                        sim.copy(isDefaultData = sim.subId == nextSimState.subId)
+                    },
+            )
+        )
+
+        scope.launch {
+            withContext(Dispatchers.IO) { switchDefaultDataSubId(nextSimState.subId) }
+            refreshState()
+        }
+
+        return true
+    }
+
     fun requestAdjacentMode(subId: Int, direction: Int): Boolean {
         val simState = _state.value.simStates.firstOrNull { it.subId == subId } ?: return false
         val availableModes = simState.availableModes
@@ -366,6 +395,26 @@ class NetworkModeController private constructor(context: Context) {
         }
     }
 
+    private fun switchDefaultDataSubId(targetSubId: Int) {
+        val subscriptions = getActiveSubscriptions()
+
+        subscriptions.forEach { info ->
+            if (info.subscriptionId != targetSubId) return@forEach
+            val telephonyForSub = telephonyManager.createForSubscriptionId(info.subscriptionId)
+            runCatching { telephonyForSub.setDataEnabled(true) }
+        }
+
+        runCatching { subscriptionManager.setDefaultDataSubId(targetSubId) }
+
+        subscriptions.forEach { info ->
+            val telephonyForSub = telephonyManager.createForSubscriptionId(info.subscriptionId)
+            val dataEnabled = runCatching { telephonyForSub.getDataEnabled() }.getOrDefault(false)
+            if (info.isOpportunistic && dataEnabled) return@forEach
+
+            runCatching { telephonyForSub.setDataEnabled(info.subscriptionId == targetSubId) }
+        }
+    }
+
     private fun safeGetSupportedMask(telephonyForSub: TelephonyManager): Long =
         runCatching { telephonyForSub.supportedRadioAccessFamily }.getOrDefault(0L)
 
@@ -434,4 +483,3 @@ class NetworkModeController private constructor(context: Context) {
         }
     }
 }
-

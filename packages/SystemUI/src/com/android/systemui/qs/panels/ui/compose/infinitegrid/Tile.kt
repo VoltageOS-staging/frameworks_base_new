@@ -203,14 +203,17 @@ fun ContentScope.Tile(
                 tileHapticsViewModelFactoryProvider.getHapticsViewModelFactory()?.create(tile)
             }
 
+        when (tile.spec.spec) {
+            "networkmode" -> {
+                QSTileNetworkMode(iconOnly = iconOnly)
+                return@trace
+            }
+        }
+
         if (!iconOnly) {
             when (tile.spec.spec) {
                 "sound" -> {
                     QSTileRingerSlider()
-                    return@trace
-                }
-                "networkmode" -> {
-                    QSTileNetworkMode()
                     return@trace
                 }
             }
@@ -661,4 +664,3 @@ private fun resources(): Resources {
     LocalConfiguration.current
     return LocalResources.current
 }
-

@@ -39,4 +39,7 @@ data class NetworkModeTileState(
         get() =
             simStates.firstOrNull { it.subId == defaultDataSubId }
                 ?: simStates.firstOrNull()
+
+    val canSwitchDefaultDataSim: Boolean
+        get() = simStates.size > 1
 }
