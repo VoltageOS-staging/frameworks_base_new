@@ -74,10 +74,27 @@ class QSFragmentComposeViewModelTest : AbstractQSFragmentComposeViewModelTest() 
                 assertThat(underTest.expansionState.progress).isEqualTo(0f)
 
                 underTest.setQsExpansionValue(0.3f)
-                assertThat(underTest.expansionState.progress).isEqualTo(0.3f)
+                assertThat(underTest.expansionState.progress)
+                    .isWithin(1e-6f)
+                    .of(interpolateQsRevealProgress(0.3f))
 
                 underTest.setQsExpansionValue(1f)
                 assertThat(underTest.expansionState.progress).isEqualTo(1f)
+            }
+        }
+
+    @Test
+    fun qsExpansionValueChanges_usesNonlinearRevealProgress() =
+        with(kosmos) {
+            testScope.testWithinLifecycle {
+                val rawProgress = 0.3f
+
+                underTest.setQsExpansionValue(rawProgress)
+
+                assertThat(underTest.expansionState.progress)
+                    .isWithin(1e-6f)
+                    .of(interpolateQsRevealProgress(rawProgress))
+                assertThat(underTest.expansionState.progress).isGreaterThan(rawProgress)
             }
         }
 
@@ -108,7 +125,9 @@ class QSFragmentComposeViewModelTest : AbstractQSFragmentComposeViewModelTest() 
                 assertThat(underTest.expansionState.progress).isEqualTo(0f)
 
                 underTest.setQsExpansionValue(0.3f)
-                assertThat(underTest.expansionState.progress).isEqualTo(0.3f)
+                assertThat(underTest.expansionState.progress)
+                    .isWithin(1e-6f)
+                    .of(interpolateQsRevealProgress(0.3f))
 
                 underTest.setQsExpansionValue(1f)
                 assertThat(underTest.expansionState.progress).isEqualTo(1f)
