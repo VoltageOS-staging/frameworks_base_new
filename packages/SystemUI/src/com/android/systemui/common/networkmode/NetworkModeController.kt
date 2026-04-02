@@ -257,9 +257,12 @@ class NetworkModeController @Inject constructor(context: Context) {
 
             syncPerSubCallbacks(subscriptions)
 
-            val simStates = withContext(Dispatchers.IO) {
-                subscriptions.map { buildSimState(it, focusedSubId, defaultDataSubId) }
-            }
+        val rawDataMap = withContext(Dispatchers.IO) {
+            subscriptions.associateWith { fetchRawSimData(it) }
+        }
+        val simStates = subscriptions.map { info ->
+            buildSimState(info, rawDataMap.getValue(info), focusedSubId, defaultDataSubId)
+        }
 
             emitState(
                 NetworkModeTileState(
@@ -317,11 +320,13 @@ class NetworkModeController @Inject constructor(context: Context) {
         }
     }
 
-    private fun buildSimState(
-        info: SubscriptionInfo,
-        focusedSubId: Int,
-        defaultDataSubId: Int,
-    ): NetworkModeSimState {
+    private data class RawSimData(
+        val userMask: Long,
+        val supportedMask: Long,
+        val carrierMask: Long,
+    )
+
+    private fun fetchRawSimData(info: SubscriptionInfo): RawSimData {
         val telephonyForSub = telephonyManager.createForSubscriptionId(info.subscriptionId)
         val userMask =
             safeGetAllowedNetworkTypes(
@@ -339,7 +344,16 @@ class NetworkModeController @Inject constructor(context: Context) {
             )
                 .takeIf { it > 0L }
                 ?: supportedMask
-        val effectiveSupportedMask = supportedMask and carrierMask
+        return RawSimData(userMask, supportedMask, carrierMask)
+    }
+
+    private fun buildSimState(
+        info: SubscriptionInfo,
+        raw: RawSimData,
+        focusedSubId: Int,
+        defaultDataSubId: Int,
+    ): NetworkModeSimState {
+        val effectiveSupportedMask = raw.supportedMask and raw.carrierMask
         val availableModes =
             NetworkMode.orderedModes.filter { mode ->
                 val capabilityMask = when (mode) {
@@ -350,7 +364,7 @@ class NetworkModeController @Inject constructor(context: Context) {
                 (capabilityMask and effectiveSupportedMask) != 0L
             }
 
-        val classifiedMode = classifyMode(userMask and effectiveSupportedMask)
+        val classifiedMode = classifyMode(raw.userMask and effectiveSupportedMask)
         val pendingChange = pendingChanges[info.subscriptionId]
         if (pendingChange != null && classifiedMode == pendingChange.targetMode) {
             pendingChanges.remove(info.subscriptionId)
@@ -361,7 +375,7 @@ class NetworkModeController @Inject constructor(context: Context) {
         val displayMode =
             pendingChanges[info.subscriptionId]?.targetMode
                 ?: classifiedMode
-                ?: availableModes.lastOrNull()
+                ?: availableModes.firstOrNull()
 
         return NetworkModeSimState(
             subId = info.subscriptionId,

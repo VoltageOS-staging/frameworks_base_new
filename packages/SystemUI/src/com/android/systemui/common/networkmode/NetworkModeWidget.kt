@@ -1,6 +1,7 @@
 package com.android.systemui.common.networkmode
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -125,7 +127,7 @@ private fun CompactNetworkModeWidget(
                         },
                     )
                 },
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.CenterStart,
     ) {
         if (simState?.isLoading == true) {
             CircularProgressIndicator(
@@ -134,7 +136,12 @@ private fun CompactNetworkModeWidget(
                 color = contentColor,
             )
         } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 44.dp),
+            ) {
                 Text(
                     text = modeLabel,
                     style = MaterialTheme.typography.titleMedium,
@@ -149,6 +156,7 @@ private fun CompactNetworkModeWidget(
                         color = contentColor.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -263,9 +271,10 @@ private fun SliderNetworkModeWidget(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = 14.dp, top = 6.dp),
+                    .padding(start = tileHeight + 4.dp, top = 6.dp),
             )
         }
 

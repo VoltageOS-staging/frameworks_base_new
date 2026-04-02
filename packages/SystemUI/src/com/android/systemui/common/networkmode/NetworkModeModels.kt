@@ -8,7 +8,7 @@ enum class NetworkMode(val label: String) {
     MODE_3G("3G");
 
     companion object {
-        val orderedModes = listOf(MODE_5G, MODE_4G, MODE_3G)
+        val orderedModes = listOf(MODE_3G, MODE_4G, MODE_5G)
     }
 }
 
