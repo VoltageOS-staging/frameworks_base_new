@@ -80,7 +80,7 @@ constructor(
             val clockSettings = settings.copy(axes = ClockAxisStyle(fontAxes))
             val typefaceCache =
                 TypefaceCache(buffers.infraMessageBuffer, NUM_CLOCK_FONT_ANIMATION_STEPS) {
-                    getDefaultClockFontFamily()
+                    getDefaultClockFontFamily(ctx)
                 }
             FlexClockController(
                 ClockContext(
@@ -135,14 +135,15 @@ constructor(
         }
     }
 
-    private fun getDefaultClockFontFamily(): Typeface {
-        val resId = resources.getIdentifier(
+    private fun getDefaultClockFontFamily(ctx: Context): Typeface {
+        val clockResources = ctx.resources
+        val resId = clockResources.getIdentifier(
             "config_clockFontFamily",
             "string",
             "android"
         )
         val family = if (resId != 0) {
-            resources.getString(resId)
+            clockResources.getString(resId)
         } else {
             "google-sans-flex-clock"
         }
@@ -156,3 +157,6 @@ constructor(
         const val NUM_CLOCK_FONT_ANIMATION_STEPS = 30
     }
 }
+
+
+

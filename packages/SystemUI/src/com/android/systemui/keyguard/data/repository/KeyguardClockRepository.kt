@@ -50,6 +50,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
@@ -149,7 +150,10 @@ constructor(
         get() = clockRegistry.settings?.axes?.get(GSFAxes.WIDTH.tag)
 
     override val currentClock: StateFlow<ClockController?> =
-        currentClockId
+        merge(
+                currentClockId,
+                configurationRepository.onAnyConfigurationChange.map { clockRegistry.currentClockId },
+            )
             .map {
                 clockEventController.clock = clockRegistry.createCurrentClock(context)
                 clockEventController.clock
