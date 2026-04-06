@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 The Android Open Source Project
+ * Copyright (C) 2026 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,28 @@
  * limitations under the License.
  */
 
-package com.android.systemui.volume.dialog.sliders.ui
+package com.android.systemui.volume.dialog.appvolume.ui.binder
 
+import com.android.systemui.haptics.slider.sliderHapticsViewModelFactory
 import com.android.systemui.kosmos.Kosmos
-import com.android.systemui.volume.dialog.appvolume.ui.binder.volumeDialogAppVolumeSliderViewBinder
+import com.android.systemui.volume.dialog.appvolume.ui.viewmodel.volumeDialogAppVolumeButtonViewModel
 import com.android.systemui.volume.dialog.appvolume.ui.viewmodel.volumeDialogAppVolumeSliderViewModel
-import com.android.systemui.volume.dialog.sliders.ui.viewmodel.volumeDialogSlidersViewModel
+import com.android.systemui.volume.dialog.domain.interactor.desktopAudioTileDetailsFeatureInteractor
 import com.android.systemui.volume.dialog.ui.viewmodel.volumeDialogViewModel
 
-val Kosmos.volumeDialogSlidersViewBinder by
+val Kosmos.volumeDialogAppVolumeButtonViewBinder by
     Kosmos.Fixture {
-        VolumeDialogSlidersViewBinder(
-            volumeDialogSlidersViewModel,
+        VolumeDialogAppVolumeButtonViewBinder(
+            volumeDialogAppVolumeButtonViewModel,
             volumeDialogViewModel,
+        )
+    }
+
+val Kosmos.volumeDialogAppVolumeSliderViewBinder by
+    Kosmos.Fixture {
+        VolumeDialogAppVolumeSliderViewBinder(
             volumeDialogAppVolumeSliderViewModel,
-            volumeDialogAppVolumeSliderViewBinder,
+            sliderHapticsViewModelFactory,
+            desktopAudioTileDetailsFeatureInteractor,
         )
     }

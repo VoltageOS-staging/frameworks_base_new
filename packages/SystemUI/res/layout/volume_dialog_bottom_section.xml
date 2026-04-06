@@ -34,7 +34,7 @@
         android:layout_height="@dimen/volume_dialog_button_size"
         android:layout_gravity="center"
         android:background="@drawable/volume_dialog_captions_button_transition_bg"
-        android:contentDescription="@string/accessibility_volume_settings"
+        android:contentDescription="@string/accessibility_app_volume"
         android:scaleType="centerInside"
         android:soundEffectsEnabled="false"
         android:tint="@androidprv:color/materialColorPrimary"

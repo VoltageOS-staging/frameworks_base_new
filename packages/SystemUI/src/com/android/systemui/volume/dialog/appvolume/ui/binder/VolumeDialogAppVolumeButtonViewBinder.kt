@@ -4,7 +4,6 @@ import android.view.View
 import com.android.app.tracing.coroutines.launchInTraced
 import com.android.app.tracing.coroutines.launchTraced
 import com.android.systemui.res.R
-import com.android.systemui.volume.Events
 import com.android.systemui.volume.dialog.appvolume.ui.viewmodel.VolumeDialogAppVolumeButtonViewModel
 import com.android.systemui.volume.dialog.dagger.scope.VolumeDialogScope
 import com.android.systemui.volume.dialog.ui.binder.ViewBinder
@@ -22,7 +21,8 @@ constructor(
     private val dialogViewModel: VolumeDialogViewModel,
 ) : ViewBinder {
     override fun CoroutineScope.bind(view: View) {
-        val appVolumeButton = view.requireViewById<android.widget.ImageButton>(R.id.app_volume_icon)
+        val appVolumeButton =
+            view.requireViewById<android.widget.ImageButton>(R.id.app_volume_icon)
 
         launchTraced("VDAVBVB#addTouchableBounds") {
             dialogViewModel.addTouchableBounds(appVolumeButton)
@@ -39,6 +39,10 @@ constructor(
             }
             .launchInTraced("VDAVBVB#isVisible", this)
 
+        viewModel.isExpanded
+            .onEach { isExpanded -> appVolumeButton.isSelected = isExpanded }
+            .launchInTraced("VDAVBVB#isExpanded", this)
+
         // Set color filter to match captions button disabled state (theme-aware)
         appVolumeButton.setColorFilter(
             appVolumeButton.context.getColor(
@@ -48,7 +52,6 @@ constructor(
 
         appVolumeButton.setOnClickListener {
             viewModel.onButtonClicked()
-            Events.writeEvent(Events.EVENT_SETTINGS_CLICK)
         }
     }
 }

@@ -42,12 +42,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
 /*
@@ -81,7 +81,7 @@ constructor(
     private val userVolumeUpdates = MutableStateFlow<VolumeUpdate?>(null)
     private val model: Flow<VolumeDialogStreamModel> = interactor.slider
 
-    val state: Flow<VolumeDialogSliderStateModel> =
+    val state: StateFlow<VolumeDialogSliderStateModel?> =
         combine(
                 interactor.isDisabledByZenMode,
                 model,
@@ -136,7 +136,12 @@ constructor(
                 )
             }
             .stateIn(coroutineScope, SharingStarted.Eagerly, null)
-            .filterNotNull()
+
+    val currentRangeStart: Float
+        get() = state.value?.valueRange?.start ?: 0f
+
+    val currentRangeEnd: Float
+        get() = state.value?.valueRange?.endInclusive ?: 0f
 
     init {
         userVolumeUpdates
