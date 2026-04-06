@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class PlayIntegritySpoofService {
     private static final String TAG = "PIF";
     private static final String CONFIG_PATH = "/data/adb/playintegrityfix";
+    private static final String PHOTOS_FLAG_FILE = "photos.enabled";
 
     private static final String[] PROP_FILES = {
         "custom.pif.prop",
@@ -520,7 +521,7 @@ public final class PlayIntegritySpoofService {
     }
 
     public boolean shouldSpoofPhotos(String packageName) {
-        return mConfigLoaded && mSpoofPhotos && TextUtils.equals(GPHOTOS_PACKAGE, packageName);
+        return isPhotosSpoofEnabled() && TextUtils.equals(GPHOTOS_PACKAGE, packageName);
     }
 
     public void spoofPhotosProps() {
@@ -528,6 +529,29 @@ public final class PlayIntegritySpoofService {
             spoofField(entry.getKey(), String.valueOf(entry.getValue()), "Photos");
         }
         Log.i(TAG, "Photos spoofing enabled - device appears as Pixel XL");
+    }
+
+    private boolean isPhotosSpoofEnabled() {
+        return Boolean.TRUE.equals(readPhotosFlag());
+    }
+
+    private Boolean readPhotosFlag() {
+        File file = new File(CONFIG_PATH, PHOTOS_FLAG_FILE);
+        if (!file.exists() || !file.canRead()) {
+            return null;
+        }
+
+        String content = readFile(file);
+        if (content == null) {
+            return null;
+        }
+
+        String value = content.trim();
+        if (value.isEmpty()) {
+            return Boolean.TRUE;
+        }
+
+        return "1".equals(value) || "true".equalsIgnoreCase(value);
     }
 
     public Boolean hasSystemFeature(String name, int version) {
