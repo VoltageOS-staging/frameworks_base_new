@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 The Android Open Source Project
+ * Copyright (C) 2026 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,54 +14,44 @@
  * limitations under the License.
  */
 
-package com.android.systemui.volume.dialog.sliders.ui
+package com.android.systemui.volume.dialog.appvolume.ui.binder
 
 import android.view.View
 import androidx.compose.ui.platform.ComposeView
 import com.android.compose.theme.PlatformTheme
-import com.android.systemui.haptics.slider.compose.ui.SliderHapticsViewModel
 import com.android.systemui.res.R
+import com.android.systemui.volume.dialog.appvolume.ui.viewmodel.VolumeDialogAppVolumeSliderViewModel
 import com.android.systemui.volume.dialog.domain.interactor.DesktopAudioTileDetailsFeatureInteractor
-import com.android.systemui.volume.dialog.sliders.dagger.VolumeDialogSliderScope
-import com.android.systemui.volume.dialog.sliders.ui.viewmodel.VolumeDialogOverscrollViewModel
-import com.android.systemui.volume.dialog.sliders.ui.viewmodel.VolumeDialogSliderViewModel
+import com.android.systemui.volume.dialog.dagger.scope.VolumeDialogScope
+import com.android.systemui.volume.dialog.sliders.ui.VolumeDialogSliderContent
+import com.android.systemui.volume.dialog.sliders.ui.rememberVolumeDialogSliderColors
+import com.android.systemui.volume.dialog.sliders.ui.rememberVolumeDialogSliderHaptics
+import com.android.systemui.haptics.slider.compose.ui.SliderHapticsViewModel
 import javax.inject.Inject
 
-@VolumeDialogSliderScope
-class VolumeDialogSliderViewBinder
+@VolumeDialogScope
+class VolumeDialogAppVolumeSliderViewBinder
 @Inject
 constructor(
-    private val viewModel: VolumeDialogSliderViewModel,
-    private val overscrollViewModel: VolumeDialogOverscrollViewModel,
+    private val viewModel: VolumeDialogAppVolumeSliderViewModel,
     private val hapticsViewModelFactory: SliderHapticsViewModel.Factory,
-    private val desktopAudioTileDetailsFeatureInteractor: DesktopAudioTileDetailsFeatureInteractor,
+    desktopAudioTileDetailsFeatureInteractor: DesktopAudioTileDetailsFeatureInteractor,
 ) {
+    private val isVolumeDialogVertical = !desktopAudioTileDetailsFeatureInteractor.isEnabled()
+
     fun bind(view: View) {
-        // Use horizontal volume dialog if the audio tile details view is enabled
-        val isVolumeDialogVertical = !desktopAudioTileDetailsFeatureInteractor.isEnabled()
         val sliderComposeView: ComposeView = view.requireViewById(R.id.volume_dialog_slider)
         sliderComposeView.setContent {
             PlatformTheme {
                 VolumeDialogSliderContent(
                     stateFlow = viewModel.state,
-                    onValueChanged = { value ->
-                        overscrollViewModel.setSlider(
-                            value = value,
-                            min = viewModel.currentRangeStart,
-                            max = viewModel.currentRangeEnd,
-                        )
-                        viewModel.setStreamVolume(value, true)
-                    },
+                    onValueChanged = { value -> viewModel.setVolume(value, true) },
                     onValueChangeFinished = viewModel::onSliderChangeFinished,
                     onSliderDragStarted = viewModel::onSliderDragStarted,
                     onSliderDragFinished = viewModel::onSliderDragFinished,
                     onTouchEvent = viewModel::onTouchEvent,
                     colors = rememberVolumeDialogSliderColors(),
-                    haptics =
-                        rememberVolumeDialogSliderHaptics(
-                            hapticsViewModelFactory,
-                            isVolumeDialogVertical,
-                        ),
+                    haptics = rememberVolumeDialogSliderHaptics(hapticsViewModelFactory, isVolumeDialogVertical),
                     isVolumeDialogVertical = isVolumeDialogVertical,
                 )
             }

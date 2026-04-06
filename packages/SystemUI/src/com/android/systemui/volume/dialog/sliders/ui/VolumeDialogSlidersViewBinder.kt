@@ -24,6 +24,8 @@ import androidx.compose.ui.util.fastForEachIndexed
 import com.android.app.tracing.coroutines.launchInTraced
 import com.android.app.tracing.coroutines.launchTraced
 import com.android.systemui.res.R
+import com.android.systemui.volume.dialog.appvolume.ui.binder.VolumeDialogAppVolumeSliderViewBinder
+import com.android.systemui.volume.dialog.appvolume.ui.viewmodel.VolumeDialogAppVolumeSliderViewModel
 import com.android.systemui.volume.dialog.dagger.scope.VolumeDialogScope
 import com.android.systemui.volume.dialog.sliders.dagger.VolumeDialogSliderComponent
 import com.android.systemui.volume.dialog.sliders.ui.viewmodel.VolumeDialogSlidersViewModel
@@ -31,6 +33,7 @@ import com.android.systemui.volume.dialog.ui.binder.ViewBinder
 import com.android.systemui.volume.dialog.ui.viewmodel.VolumeDialogViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onEach
 
 @VolumeDialogScope
@@ -39,6 +42,8 @@ class VolumeDialogSlidersViewBinder
 constructor(
     private val viewModel: VolumeDialogSlidersViewModel,
     private val dialogViewModel: VolumeDialogViewModel,
+    private val appVolumeSliderViewModel: VolumeDialogAppVolumeSliderViewModel,
+    private val appVolumeSliderViewBinder: VolumeDialogAppVolumeSliderViewBinder,
 ) : ViewBinder {
 
     override fun CoroutineScope.bind(view: View) {
@@ -53,8 +58,10 @@ constructor(
         launchTraced("VDSVB#addTouchableBounds") {
             dialogViewModel.addTouchableBounds(mainSliderContainer, floatingSlidersContainer)
         }
-        viewModel.sliders
-            .onEach { uiModel ->
+        combine(viewModel.sliders, appVolumeSliderViewModel.state) { uiModel, appSliderState ->
+                uiModel to (appSliderState != null)
+            }
+            .onEach { (uiModel, shouldShowAppSlider) ->
                 bindSlider(
                     uiModel.sliderComponent,
                     mainSliderContainer,
@@ -64,11 +71,16 @@ constructor(
                 val floatingSliderViewBinders = uiModel.floatingSliderComponent
                 floatingSlidersContainer.ensureChildCount(
                     viewLayoutId = R.layout.volume_dialog_slider_floating,
-                    count = floatingSliderViewBinders.size,
+                    count = floatingSliderViewBinders.size + if (shouldShowAppSlider) 1 else 0,
                 )
                 floatingSliderViewBinders.fastForEachIndexed { index, sliderComponent ->
                     val sliderContainer = floatingSlidersContainer.getChildAt(index)
                     bindSlider(sliderComponent, sliderContainer, arrayOf(sliderContainer))
+                }
+                if (shouldShowAppSlider) {
+                    val sliderContainer =
+                        floatingSlidersContainer.getChildAt(floatingSliderViewBinders.size)
+                    appVolumeSliderViewBinder.bind(sliderContainer)
                 }
             }
             .launchInTraced("VDSVB#sliders", this)
@@ -88,7 +100,7 @@ private fun ViewGroup.ensureChildCount(@LayoutRes viewLayoutId: Int, count: Int)
     val childCountDelta = childCount - count
     when {
         childCountDelta > 0 -> {
-            removeViews(0, childCountDelta)
+            removeViews(count, childCountDelta)
         }
         childCountDelta < 0 -> {
             val inflater = LayoutInflater.from(context)
