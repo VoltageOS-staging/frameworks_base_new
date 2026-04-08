@@ -51,6 +51,7 @@ import com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_FREEFORM
 import com.android.systemui.statusbar.CommandQueue
 import com.android.systemui.statusbar.commandQueue
 import com.android.systemui.statusbar.commandline.commandRegistry
+import com.android.systemui.statusbar.phone.ShadeTouchableRegionManager
 import com.android.systemui.statusbar.policy.configurationController
 import com.android.systemui.statusbar.policy.keyguardStateController
 import com.android.systemui.testKosmos
@@ -95,6 +96,8 @@ class WMShellTest : SysuiTestCase() {
     private val Kosmos.desktopMode by Kosmos.Fixture { mock<DesktopMode>() }
     private val Kosmos.recentTasks by Kosmos.Fixture { mock<RecentTasks>() }
     private val Kosmos.screenLifecycle by Kosmos.Fixture { mock<ScreenLifecycle>() }
+    private val Kosmos.shadeTouchableRegionManager by
+        Kosmos.Fixture { mock<ShadeTouchableRegionManager>() }
     private val Kosmos.displayTracker by Kosmos.Fixture { FakeDisplayTracker(context) }
     private val Kosmos.shellInterface by Kosmos.Fixture { mock<ShellInterface>() }
     private val Kosmos.perDisplayRepository by
@@ -123,6 +126,7 @@ class WMShellTest : SysuiTestCase() {
                 /* noteTaskInitializer = */ mock<NoteTaskInitializer>(),
                 /* communalTransitionViewModel = */ communalTransitionViewModel,
                 /* javaAdapter = */ javaAdapter,
+                /* shadeTouchableRegionManager = */ shadeTouchableRegionManager,
                 /* sysUiMainExecutor = */ fakeExecutor,
                 /* perDisplayRepository= */ perDisplayRepository,
             )
@@ -150,6 +154,25 @@ class WMShellTest : SysuiTestCase() {
             verify(oneHanded)
                 .registerTransitionCallback(any(OneHandedTransitionCallback::class.java))
             verify(oneHanded).registerEventCallback(any(OneHandedEventCallback::class.java))
+        }
+
+    @Test
+    fun initOneHanded_transitionCallback_updatesShadeTouchableRegionOffset() =
+        kosmos.runTest {
+            underTest.initOneHanded(oneHanded)
+            val transitionCallbackCaptor =
+                ArgumentCaptor.forClass(OneHandedTransitionCallback::class.java)
+            verify(oneHanded).registerTransitionCallback(transitionCallbackCaptor.capture())
+
+            transitionCallbackCaptor.value.onStartFinished(Rect(0, 250, 1000, 2000))
+            fakeExecutor.runAllReady()
+
+            verify(shadeTouchableRegionManager).setOneHandedTopOffset(250)
+
+            transitionCallbackCaptor.value.onStopFinished(Rect(0, 0, 1000, 2000))
+            fakeExecutor.runAllReady()
+
+            verify(shadeTouchableRegionManager).setOneHandedTopOffset(0)
         }
 
     @Test

@@ -176,6 +176,17 @@ class ShadeTouchableRegionManagerTest : SysuiTestCase() {
             assertThat(rects).containsExactly(expectedRect)
         }
 
+    @Test
+    fun calculateTouchableRegion_oneHandedOffset_shiftsStatusBarRegion() =
+        kosmos.runTest {
+            val statusBarHeight = SystemBarUtils.getStatusBarHeight(mContext)
+
+            underTest.setOneHandedTopOffset(200)
+
+            assertThat(underTest.calculateTouchableRegion().getBounds())
+                .isEqualTo(Rect(0, 200, 1000, 200 + statusBarHeight))
+        }
+
     private fun Kosmos.openShadeOverlay(overlay: OverlayKey) {
         val shadeMode by collectLastValue(shadeMode)
         val currentScene by collectLastValue(sceneInteractor.currentScene)

@@ -60,6 +60,7 @@ import com.android.systemui.settings.UserTracker;
 import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.commandline.Command;
 import com.android.systemui.statusbar.commandline.CommandRegistry;
+import com.android.systemui.statusbar.phone.ShadeTouchableRegionManager;
 import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.util.kotlin.JavaAdapter;
@@ -139,6 +140,7 @@ public final class WMShell implements
     private final NoteTaskInitializer mNoteTaskInitializer;
     private final CommunalTransitionViewModel mCommunalTransitionViewModel;
     private final JavaAdapter mJavaAdapter;
+    private final ShadeTouchableRegionManager mShadeTouchableRegionManager;
     private final Executor mSysUiMainExecutor;
     private final PerDisplayRepository<SysUiState> mPerDisplaySysUiStateRepository;
 
@@ -223,6 +225,7 @@ public final class WMShell implements
             NoteTaskInitializer noteTaskInitializer,
             CommunalTransitionViewModel communalTransitionViewModel,
             JavaAdapter javaAdapter,
+            ShadeTouchableRegionManager shadeTouchableRegionManager,
             @Main Executor sysUiMainExecutor,
             PerDisplayRepository<SysUiState> perDisplayRepository
     ) {
@@ -246,6 +249,7 @@ public final class WMShell implements
         mNoteTaskInitializer = noteTaskInitializer;
         mCommunalTransitionViewModel = communalTransitionViewModel;
         mJavaAdapter = javaAdapter;
+        mShadeTouchableRegionManager = shadeTouchableRegionManager;
         mSysUiMainExecutor = sysUiMainExecutor;
         mPerDisplaySysUiStateRepository = perDisplayRepository;
     }
@@ -371,6 +375,7 @@ public final class WMShell implements
                 mSysUiMainExecutor.execute(() -> {
                     mSysUiState.setFlag(SYSUI_STATE_ONE_HANDED_ACTIVE,
                             true).commitUpdate(mDisplayTracker.getDefaultDisplayId());
+                    mShadeTouchableRegionManager.setOneHandedTopOffset(bounds.top);
                 });
             }
 
@@ -379,6 +384,7 @@ public final class WMShell implements
                 mSysUiMainExecutor.execute(() -> {
                     mSysUiState.setFlag(SYSUI_STATE_ONE_HANDED_ACTIVE,
                             false).commitUpdate(mDisplayTracker.getDefaultDisplayId());
+                    mShadeTouchableRegionManager.setOneHandedTopOffset(bounds.top);
                 });
             }
         });
