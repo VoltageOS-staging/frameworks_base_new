@@ -96,6 +96,7 @@ public final class ShadeTouchableRegionManager implements Dumpable {
     private Boolean mCommunalVisible = false;
     private final Region mTouchableRegion = new Region();
     private @Nullable Rect mShadeBounds = null;
+    private int mOneHandedTopOffset = 0;
     private int mDisplayCutoutTouchableRegionSize;
     private int mStatusBarHeight;
 
@@ -210,6 +211,8 @@ public final class ShadeTouchableRegionManager implements Dumpable {
         pw.println(mIsDesktopStatusBarEnabled);
         pw.print("  mShadeBounds=");
         pw.println(mShadeBounds);
+        pw.print("  mOneHandedTopOffset=");
+        pw.println(mOneHandedTopOffset);
     }
 
     private void onShadeOrQsExpanded(Boolean isExpanded) {
@@ -300,7 +303,22 @@ public final class ShadeTouchableRegionManager implements Dumpable {
                     mStatusBarHeight);
             updateRegionForNotch(mTouchableRegion);
         }
+        if (mOneHandedTopOffset != 0) {
+            mTouchableRegion.translate(/* dx= */ 0, /* dy= */ mOneHandedTopOffset);
+        }
         return mTouchableRegion;
+    }
+
+    /**
+     * Updates the vertical offset of the collapsed shade touch region while one-handed mode is
+     * active.
+     */
+    public void setOneHandedTopOffset(int oneHandedTopOffset) {
+        if (mOneHandedTopOffset == oneHandedTopOffset) {
+            return;
+        }
+        mOneHandedTopOffset = oneHandedTopOffset;
+        updateTouchableRegion();
     }
 
     /**
@@ -383,11 +401,13 @@ public final class ShadeTouchableRegionManager implements Dumpable {
         boolean hasCutoutInset = (mNotificationShadeWindowView != null)
                 && (mNotificationShadeWindowView.getRootWindowInsets() != null)
                 && (mNotificationShadeWindowView.getRootWindowInsets().getDisplayCutout() != null);
-        return mHeadsUpManager.hasPinnedHeadsUp()
+        return mNotificationShadeWindowView != null
+                && (mHeadsUpManager.hasPinnedHeadsUp()
                 || mHeadsUpManager.isHeadsUpAnimatingAwayValue()
                 || mForceCollapsedUntilLayout
+                || mOneHandedTopOffset != 0
                 || hasCutoutInset
-                || mNotificationShadeWindowController.getForcePluginOpen();
+                || mNotificationShadeWindowController.getForcePluginOpen());
     }
 
     /**
