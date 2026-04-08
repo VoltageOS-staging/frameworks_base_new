@@ -44,6 +44,8 @@ constructor(
     private val systemClock: SystemClock,
 ) {
     private val userVolumeUpdates = MutableStateFlow<VolumeUpdate?>(null)
+    val selectedApp: VolumeDialogAppVolumeModel?
+        get() = interactor.state.value.selectedApp
 
     val state: StateFlow<VolumeDialogSliderStateModel?> =
         combine(interactor.state, userVolumeUpdates) { appVolumeState, currentVolumeUpdate ->

@@ -89,6 +89,7 @@ fun VolumeDialogSliderContent(
     colors: SliderColors,
     haptics: Haptics,
     isVolumeDialogVertical: Boolean,
+    showTrackIcon: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val collectedSliderStateModel by stateFlow.collectAsStateWithLifecycle(null)
@@ -118,35 +119,42 @@ fun VolumeDialogSliderContent(
         haptics = haptics,
         stepDistance = 1f,
         track = { sliderState ->
+            val trackIcon = sliderStateModel.icon.takeIf { showTrackIcon }
             SliderTrack(
                 sliderState,
                 colors = colors,
                 isEnabled = !sliderStateModel.isDisabled,
                 isVertical = isVolumeDialogVertical,
-                activeTrackEndIcon = { iconsState ->
-                    SliderIcon(
-                        icon = {
-                            Icon(
-                                icon = sliderStateModel.icon,
-                                tint = null,
-                                modifier = Modifier.size(20.dp),
+                activeTrackEndIcon =
+                    trackIcon?.let { icon ->
+                        { iconsState ->
+                            SliderIcon(
+                                icon = {
+                                    Icon(
+                                        icon = icon,
+                                        tint = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                isVisible = !iconsState.isInactiveTrackEndIconVisible,
                             )
-                        },
-                        isVisible = !iconsState.isInactiveTrackEndIconVisible,
-                    )
-                },
-                inactiveTrackEndIcon = { iconsState ->
-                    SliderIcon(
-                        icon = {
-                            Icon(
-                                icon = sliderStateModel.icon,
-                                tint = null,
-                                modifier = Modifier.size(20.dp),
+                        }
+                    },
+                inactiveTrackEndIcon =
+                    trackIcon?.let { icon ->
+                        { iconsState ->
+                            SliderIcon(
+                                icon = {
+                                    Icon(
+                                        icon = icon,
+                                        tint = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                isVisible = iconsState.isInactiveTrackEndIconVisible,
                             )
-                        },
-                        isVisible = iconsState.isInactiveTrackEndIconVisible,
-                    )
-                },
+                        }
+                    },
             )
         },
         thumb = { sliderState, interactions ->

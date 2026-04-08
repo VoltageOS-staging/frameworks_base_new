@@ -17,8 +17,10 @@
 package com.android.systemui.volume.dialog.appvolume.ui.binder
 
 import android.view.View
+import android.widget.ImageView
 import androidx.compose.ui.platform.ComposeView
 import com.android.compose.theme.PlatformTheme
+import com.android.systemui.common.shared.model.ContentDescription.Companion.loadContentDescription
 import com.android.systemui.res.R
 import com.android.systemui.volume.dialog.appvolume.ui.viewmodel.VolumeDialogAppVolumeSliderViewModel
 import com.android.systemui.volume.dialog.domain.interactor.DesktopAudioTileDetailsFeatureInteractor
@@ -40,6 +42,14 @@ constructor(
     private val isVolumeDialogVertical = !desktopAudioTileDetailsFeatureInteractor.isEnabled()
 
     fun bind(view: View) {
+        val appIcon = view.requireViewById<ImageView>(R.id.app_volume_slider_icon)
+        val selectedApp = viewModel.selectedApp
+        appIcon.setImageDrawable(selectedApp?.icon?.drawable)
+        appIcon.contentDescription = selectedApp?.icon?.contentDescription.loadContentDescription(
+            appIcon.context
+        )
+        appIcon.imageTintList = null
+
         val sliderComposeView: ComposeView = view.requireViewById(R.id.volume_dialog_slider)
         sliderComposeView.setContent {
             PlatformTheme {
@@ -53,6 +63,7 @@ constructor(
                     colors = rememberVolumeDialogSliderColors(),
                     haptics = rememberVolumeDialogSliderHaptics(hapticsViewModelFactory, isVolumeDialogVertical),
                     isVolumeDialogVertical = isVolumeDialogVertical,
+                    showTrackIcon = false,
                 )
             }
         }

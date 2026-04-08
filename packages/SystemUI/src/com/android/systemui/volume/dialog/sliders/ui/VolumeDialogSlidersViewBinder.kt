@@ -71,7 +71,8 @@ constructor(
                 val floatingSliderViewBinders = uiModel.floatingSliderComponent
                 floatingSlidersContainer.ensureChildCount(
                     viewLayoutId = R.layout.volume_dialog_slider_floating,
-                    count = floatingSliderViewBinders.size + if (shouldShowAppSlider) 1 else 0,
+                    count = floatingSliderViewBinders.size,
+                    appSliderView = floatingSlidersContainer.getAppSliderView(),
                 )
                 floatingSliderViewBinders.fastForEachIndexed { index, sliderComponent ->
                     val sliderContainer = floatingSlidersContainer.getChildAt(index)
@@ -79,8 +80,18 @@ constructor(
                 }
                 if (shouldShowAppSlider) {
                     val sliderContainer =
-                        floatingSlidersContainer.getChildAt(floatingSliderViewBinders.size)
+                        floatingSlidersContainer.getAppSliderView()
+                            ?: LayoutInflater.from(floatingSlidersContainer.context).inflate(
+                                R.layout.volume_dialog_slider_floating_app,
+                                floatingSlidersContainer,
+                                false,
+                            )
+                    if (sliderContainer.parent == null) {
+                        floatingSlidersContainer.addView(sliderContainer)
+                    }
                     appVolumeSliderViewBinder.bind(sliderContainer)
+                } else {
+                    floatingSlidersContainer.removeAppSliderView()
                 }
             }
             .launchInTraced("VDSVB#sliders", this)
@@ -96,15 +107,31 @@ constructor(
     }
 }
 
-private fun ViewGroup.ensureChildCount(@LayoutRes viewLayoutId: Int, count: Int) {
-    val childCountDelta = childCount - count
+private fun ViewGroup.getAppSliderView(): View? =
+    findViewById(R.id.volume_dialog_app_slider_container)
+
+private fun ViewGroup.removeAppSliderView() {
+    getAppSliderView()?.let(::removeView)
+}
+
+private fun ViewGroup.ensureChildCount(
+    @LayoutRes viewLayoutId: Int,
+    count: Int,
+    appSliderView: View? = null,
+) {
+    val systemChildCount = childCount - if (appSliderView != null) 1 else 0
+    val childCountDelta = systemChildCount - count
     when {
         childCountDelta > 0 -> {
             removeViews(count, childCountDelta)
         }
         childCountDelta < 0 -> {
             val inflater = LayoutInflater.from(context)
-            repeat(-childCountDelta) { inflater.inflate(viewLayoutId, this, true) }
+            repeat(-childCountDelta) {
+                val child = inflater.inflate(viewLayoutId, this, false)
+                val insertIndex = appSliderView?.let(::indexOfChild)?.takeIf { it >= 0 } ?: childCount
+                addView(child, insertIndex)
+            }
         }
     }
 }
