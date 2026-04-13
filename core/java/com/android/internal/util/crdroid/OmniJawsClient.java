@@ -49,6 +49,7 @@ public class OmniJawsClient {
     public static final String SERVICE_PACKAGE = "org.omnirom.omnijaws";
     public static final Uri WEATHER_URI = Uri.parse("content://org.omnirom.omnijaws.provider/weather");
     public static final Uri SETTINGS_URI = Uri.parse("content://org.omnirom.omnijaws.provider/settings");
+    public static final Uri HOURLY_URI = Uri.parse("content://org.omnirom.omnijaws.provider/hourly");
     public static final String WEATHER_UPDATE = SERVICE_PACKAGE + ".WEATHER_UPDATE";
     public static final String WEATHER_ERROR = SERVICE_PACKAGE + ".WEATHER_ERROR";
 
@@ -62,11 +63,17 @@ public class OmniJawsClient {
     public static final String[] WEATHER_PROJECTION = {
             "city", "wind_speed", "wind_direction", "condition_code", "temperature",
             "humidity", "condition", "forecast_low", "forecast_high", "forecast_condition",
-            "forecast_condition_code", "time_stamp", "forecast_date", "pin_wheel"
+            "forecast_condition_code", "time_stamp", "forecast_date", "pin_wheel",
+            "feels_like", "pressure", "uvi", "visibility", "dew_point", "sunrise", "sunset"
     };
 
     public static final String[] SETTINGS_PROJECTION = {
-            "enabled", "units", "provider", "setup", "icon_pack"
+            "enabled", "units", "provider", "setup", "icon_pack", "update_error", "last_update"
+    };
+
+    public static final String[] HOURLY_PROJECTION = {
+            "hourly_temperature", "hourly_condition_code", "hourly_condition",
+            "hourly_timestamp", "hourly_humidity", "hourly_wind_speed"
     };
 
     private static final DecimalFormat sNoDigitsFormat = new DecimalFormat("0");
@@ -79,6 +86,7 @@ public class OmniJawsClient {
     private String mIconPrefix;
     private String mSettingIconPackage;
     private boolean mMetric;
+    private int mLastWeatherError = -1;
 
     private final List<WeakReference<OmniJawsObserver>> mObservers = new ArrayList<>();
     private WeatherUpdateReceiver mReceiver;
@@ -111,7 +119,8 @@ public class OmniJawsClient {
                 if (WEATHER_UPDATE.equals(action)) {
                     obs.weatherUpdated();
                 } else if (WEATHER_ERROR.equals(action)) {
-                    obs.weatherError(intent.getIntExtra(EXTRA_ERROR, 0));
+                    mLastWeatherError = intent.getIntExtra(EXTRA_ERROR, 0);
+                    obs.weatherError(mLastWeatherError);
                 }
             }
         }
@@ -158,8 +167,15 @@ public class OmniJawsClient {
                         mCachedInfo.temp = getFormattedValue(weatherCursor.getFloat(4));
                         mCachedInfo.humidity = weatherCursor.getString(5);
                         mCachedInfo.condition = weatherCursor.getString(6);
-                        mCachedInfo.timeStamp = Long.parseLong(weatherCursor.getString(11));
+                        mCachedInfo.timeStamp = weatherCursor.getLong(11);
                         mCachedInfo.pinWheel = weatherCursor.getString(13);
+                        mCachedInfo.feelsLike = weatherCursor.getFloat(14);
+                        mCachedInfo.pressure = weatherCursor.getFloat(15);
+                        mCachedInfo.uvi = weatherCursor.getFloat(16);
+                        mCachedInfo.visibility = weatherCursor.getFloat(17);
+                        mCachedInfo.dewPoint = weatherCursor.getFloat(18);
+                        mCachedInfo.sunrise = weatherCursor.getLong(19);
+                        mCachedInfo.sunset = weatherCursor.getLong(20);
                     } else {
                         DayForecast day = new DayForecast();
                         day.low = getFormattedValue(weatherCursor.getFloat(7));
@@ -176,6 +192,29 @@ public class OmniJawsClient {
             Log.e(TAG, "queryWeather: weather", e);
         }
 
+        if (mCachedInfo != null) {
+            try (Cursor hourlyCursor = context.getContentResolver().query(
+                    HOURLY_URI, HOURLY_PROJECTION, null, null, null)) {
+
+                if (hourlyCursor != null && hourlyCursor.getCount() > 0) {
+                    List<HourlyForecast> hourlyForecasts = new ArrayList<>();
+                    while (hourlyCursor.moveToNext()) {
+                        HourlyForecast hourly = new HourlyForecast();
+                        hourly.temperature = hourlyCursor.getFloat(0);
+                        hourly.conditionCode = hourlyCursor.getInt(1);
+                        hourly.condition = hourlyCursor.getString(2);
+                        hourly.timestamp = hourlyCursor.getLong(3);
+                        hourly.humidity = hourlyCursor.getFloat(4);
+                        hourly.windSpeed = hourlyCursor.getFloat(5);
+                        hourlyForecasts.add(hourly);
+                    }
+                    mCachedInfo.hourlyForecasts = hourlyForecasts;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "queryWeather: hourly", e);
+            }
+        }
+
         try (Cursor settingsCursor = context.getContentResolver().query(
                 SETTINGS_URI, SETTINGS_PROJECTION, null, null, null)) {
 
@@ -186,6 +225,13 @@ public class OmniJawsClient {
                     mCachedInfo.windUnits = getWindUnit();
                     mCachedInfo.provider = settingsCursor.getString(2);
                     mCachedInfo.iconPack = settingsCursor.getString(4);
+                    mCachedInfo.isStale = settingsCursor.getInt(5) == 1;
+                    mCachedInfo.errorReason = mCachedInfo.isStale
+                            ? (mLastWeatherError >= 0 ? mLastWeatherError : EXTRA_ERROR_NETWORK)
+                            : -1;
+                }
+                if (!settingsCursor.isNull(5) && settingsCursor.getInt(5) == 0) {
+                    mLastWeatherError = -1;
                 }
             }
         } catch (Exception e) {
@@ -387,8 +433,21 @@ public class OmniJawsClient {
         public String provider;
         public String pinWheel;
         public String iconPack;
+        public float feelsLike = Float.NaN;
+        public float pressure = Float.NaN;
+        public float uvi = Float.NaN;
+        public float visibility = Float.NaN;
+        public float dewPoint = Float.NaN;
+        public long sunrise;
+        public long sunset;
+        public List<HourlyForecast> hourlyForecasts;
+        public boolean isStale;
+        public int errorReason = -1;
 
         public String getLastUpdateTime() {
+            if (timeStamp == null || timeStamp <= 0) {
+                return "";
+            }
             return new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date(timeStamp));
         }
 
@@ -409,5 +468,14 @@ public class OmniJawsClient {
         public String toString() {
             return "[" + date + " - " + low + "/" + high + " - " + condition + "]";
         }
+    }
+
+    public static class HourlyForecast {
+        public float temperature;
+        public int conditionCode;
+        public String condition;
+        public long timestamp;
+        public float humidity;
+        public float windSpeed;
     }
 }
