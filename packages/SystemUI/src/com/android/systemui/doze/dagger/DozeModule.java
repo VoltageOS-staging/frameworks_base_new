@@ -25,6 +25,7 @@ import com.android.systemui.doze.DozeHost;
 import com.android.systemui.doze.DozeMachine;
 import com.android.systemui.doze.DozeMinMode;
 import com.android.systemui.doze.DozePauser;
+import com.android.systemui.doze.DozeScreenOffPeekController;
 import com.android.systemui.doze.DozeScreenBrightness;
 import com.android.systemui.doze.DozeScreenState;
 import com.android.systemui.doze.DozeScreenStatePreventingAdapter;
@@ -71,7 +72,8 @@ public abstract class DozeModule {
     @Provides
     static DozeMachine.Part[] providesDozeMachineParts(DozePauser dozePauser,
             DozeFalsingManagerAdapter dozeFalsingManagerAdapter, DozeTriggers dozeTriggers,
-            DozeUi dozeUi, DozeScreenState dozeScreenState,
+            DozeUi dozeUi, DozeScreenOffPeekController dozeScreenOffPeekController,
+            DozeScreenState dozeScreenState,
             DozeScreenBrightness dozeScreenBrightness, DozeWallpaperState dozeWallpaperState,
             DozeDockHandler dozeDockHandler, DozeMinMode dozeMinMode,
             DozeAuthRemover dozeAuthRemover,
@@ -81,6 +83,7 @@ public abstract class DozeModule {
         parts.add(dozeFalsingManagerAdapter);
         parts.add(dozeTriggers);
         parts.add(dozeUi);
+        parts.add(dozeScreenOffPeekController);
         parts.add(dozeScreenBrightness);
         parts.add(dozeScreenState);
         parts.add(dozeWallpaperState);

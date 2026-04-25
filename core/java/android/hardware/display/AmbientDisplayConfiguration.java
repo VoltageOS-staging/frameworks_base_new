@@ -57,6 +57,7 @@ public class AmbientDisplayConfiguration {
     private static final String[] DOZE_SETTINGS = {
             Settings.Secure.DOZE_ENABLED,
             Settings.Secure.DOZE_ALWAYS_ON,
+            Settings.Secure.DOZE_PEEK,
             Settings.Secure.DOZE_PICK_UP_GESTURE,
             Settings.Secure.DOZE_PULSE_ON_LONG_PRESS,
             Settings.Secure.DOZE_DOUBLE_TAP_GESTURE,
@@ -99,7 +100,7 @@ public class AmbientDisplayConfiguration {
         return pulseOnNotificationEnabled(user)
                 || pulseOnLongPressEnabled(user)
                 || pulseOnCustomDozeEventEnabled(user)
-                || alwaysOnEnabled(user)
+                || screenOffAodEnabled(user)
                 || wakeLockScreenGestureEnabled(user)
                 || wakeDisplayGestureEnabled(user)
                 || pickupGestureEnabled(user)
@@ -278,6 +279,29 @@ public class AmbientDisplayConfiguration {
     @TestApi
     public boolean alwaysOnEnabled(int user) {
         return alwaysOnEnabledSetting(user) || alwaysOnChargingEnabled(user);
+    }
+
+    /**
+     * Returns if any screen-off AOD experience should start for the current screen-off session.
+     *
+     * <p>This includes full AOD as well as a short-lived AOD peek.
+     *
+     * @hide
+     */
+    public boolean screenOffAodEnabled(int user) {
+        return alwaysOnEnabled(user) || screenOffPeekEnabled(user);
+    }
+
+    /**
+     * Returns if a short-lived screen-off AOD peek should be shown for the current user.
+     *
+     * @hide
+     */
+    public boolean screenOffPeekEnabled(int user) {
+        return boolSettingDefaultOff(Settings.Secure.DOZE_PEEK, user)
+                && ambientDisplayAvailable()
+                && !alwaysOnEnabled(user)
+                && !accessibilityInversionEnabled(user);
     }
 
     public boolean alwaysOnEnabledSetting(int user) {
