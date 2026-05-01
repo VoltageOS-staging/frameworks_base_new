@@ -80,10 +80,10 @@ public abstract class DozeModule {
             DozeSuppressor dozeSuppressor, DozeTransitionListener dozeTransitionListener) {
         List<DozeMachine.Part> parts = new ArrayList<>();
         parts.add(dozePauser);
+        parts.add(dozeScreenOffPeekController);
         parts.add(dozeFalsingManagerAdapter);
         parts.add(dozeTriggers);
         parts.add(dozeUi);
-        parts.add(dozeScreenOffPeekController);
         parts.add(dozeScreenBrightness);
         parts.add(dozeScreenState);
         parts.add(dozeWallpaperState);
