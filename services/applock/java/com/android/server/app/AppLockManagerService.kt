@@ -1490,7 +1490,7 @@ class AppLockManagerService(
                     PendingIntent.FLAG_CANCEL_CURRENT or
                         PendingIntent.FLAG_ONE_SHOT or
                         PendingIntent.FLAG_IMMUTABLE,
-                    ActivityOptions.makeBasic().toBundle()
+                    info.checkedOptions?.toBundle() ?: ActivityOptions.makeBasic().toBundle()
                 )
             )
             val intent = Intent(AppLockManager.ACTION_UNLOCK_APP)
