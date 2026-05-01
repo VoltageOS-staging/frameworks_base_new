@@ -98,6 +98,7 @@ public class DozeParameters implements
 
     private boolean mControlScreenOffAnimation;
     private boolean mIsQuickPickupEnabled;
+    private boolean mScreenOffPeekActive;
 
     private boolean mKeyguardVisible;
     @VisibleForTesting
@@ -261,6 +262,10 @@ public class DozeParameters implements
      * @return duration in millis.
      */
     public long getWallpaperAodDuration() {
+        if (mScreenOffPeekActive) {
+            return mAmbientDisplayConfiguration.getScreenOffPeekDurationMillis(
+                    mUserTracker.getUserId());
+        }
         if (shouldControlScreenOff()) {
             return DozeScreenState.ENTER_DOZE_HIDE_WALLPAPER_DELAY;
         }
@@ -289,9 +294,19 @@ public class DozeParameters implements
      * @return {@code true} if enabled and available.
      */
     public boolean getAlwaysOn() {
-        return (mAmbientDisplayConfiguration.screenOffAodEnabled(mUserTracker.getUserId())
+        return ((mAmbientDisplayConfiguration.alwaysOnEnabled(mUserTracker.getUserId())
+                || mScreenOffPeekActive)
                 && !mBatteryController.isAodPowerSave())
                 || isMinModeActive();
+    }
+
+    public void setScreenOffPeekActive(boolean active) {
+        if (mScreenOffPeekActive == active) {
+            return;
+        }
+        mScreenOffPeekActive = active;
+        updateControlScreenOff();
+        dispatchAlwaysOnEvent();
     }
 
     private boolean shouldUseScreenOffAnimationAod() {

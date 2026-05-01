@@ -26,6 +26,7 @@ import android.provider.Settings;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.doze.dagger.DozeScope;
 import com.android.systemui.settings.UserTracker;
+import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.util.AlarmTimeout;
 
 import java.io.PrintWriter;
@@ -44,6 +45,7 @@ public class DozeScreenOffPeekController implements DozeMachine.Part {
     private final UserTracker mUserTracker;
     private final AlarmTimeout mPeekTimeout;
     private final PocketManager mPocketManager;
+    private final DozeParameters mDozeParameters;
 
     private DozeMachine mMachine;
 
@@ -52,11 +54,13 @@ public class DozeScreenOffPeekController implements DozeMachine.Part {
             Context context,
             AmbientDisplayConfiguration config,
             UserTracker userTracker,
+            DozeParameters dozeParameters,
             @Main Handler handler,
             AlarmManager alarmManager) {
         mContext = context;
         mConfig = config;
         mUserTracker = userTracker;
+        mDozeParameters = dozeParameters;
         mPeekTimeout = new AlarmTimeout(alarmManager, this::onTimeout, TAG, handler);
         mPocketManager = (PocketManager) context.getSystemService(Context.POCKET_SERVICE);
     }
@@ -68,7 +72,10 @@ public class DozeScreenOffPeekController implements DozeMachine.Part {
 
     @Override
     public void transitionTo(DozeMachine.State oldState, DozeMachine.State newState) {
-        if (newState == DozeMachine.State.DOZE_AOD && shouldRunPeek()) {
+        final boolean peekActive = newState == DozeMachine.State.DOZE_AOD && shouldRunPeek();
+        mDozeParameters.setScreenOffPeekActive(peekActive);
+
+        if (peekActive) {
             if (shouldSkipForPocket()) {
                 mMachine.requestState(DozeMachine.State.DOZE);
                 return;
