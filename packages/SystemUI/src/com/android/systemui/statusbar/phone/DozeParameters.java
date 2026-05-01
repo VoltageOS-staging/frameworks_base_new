@@ -300,6 +300,11 @@ public class DozeParameters implements
                 || isMinModeActive();
     }
 
+    public boolean shouldShowAodUi() {
+        return getAlwaysOn()
+                || mAmbientDisplayConfiguration.screenOffPeekEnabled(mUserTracker.getUserId());
+    }
+
     public void setScreenOffPeekActive(boolean active) {
         if (mScreenOffPeekActive == active) {
             return;
