@@ -21,7 +21,6 @@ import android.annotation.RequiresPermission
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.ActivityManagerInternal
-import android.app.ActivityOptions
 import android.app.ActivityTaskManager
 import android.app.AlarmManager
 import android.app.AppLockData
@@ -1469,30 +1468,12 @@ class AppLockManagerService(
             }
         }
 
-        override fun interceptActivity(info: ActivityInterceptorInfo): Intent? {
+        override fun interceptActivity(info: ActivityInterceptorInfo, target: IntentSender): Intent? {
             val packageName = info.activityInfo.packageName
             logD {
                 "interceptActivity, pkg = $packageName"
             }
             if (!requireUnlock(packageName, info.userId)) return null
-            val target = IntentSender(
-                atmInternal.getIntentSender(
-                    ActivityManager.INTENT_SENDER_ACTIVITY,
-                    info.callingPackage,
-                    info.callingFeatureId,
-                    info.callingPid,
-                    info.userId,
-                    null /* token */,
-                    null /* resultCode */,
-                    0 /* requestCode */,
-                    arrayOf(info.intent),
-                    arrayOf(info.resolvedType),
-                    PendingIntent.FLAG_CANCEL_CURRENT or
-                        PendingIntent.FLAG_ONE_SHOT or
-                        PendingIntent.FLAG_IMMUTABLE,
-                    info.checkedOptions?.toBundle() ?: ActivityOptions.makeBasic().toBundle()
-                )
-            )
             val intent = Intent(AppLockManager.ACTION_UNLOCK_APP)
                 .setPackage(SETTINGS_PACKAGE)
                 .apply {

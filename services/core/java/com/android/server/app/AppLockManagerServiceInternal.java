@@ -17,6 +17,7 @@
 package com.android.server.app;
 
 import android.content.Intent;
+import android.content.IntentSender;
 
 import com.android.server.wm.ActivityInterceptorCallback.ActivityInterceptorInfo;
 
@@ -65,10 +66,13 @@ public interface AppLockManagerServiceInternal {
      * to show confirm credentials prompt.
      *
      * @param info [ActivityInterceptorInfo] of intercepted activity.
+     * @param target pre-built [IntentSender] that resumes the original
+     *    activity launch after authentication, created by the interceptor
+     *    using its own safe option-building logic.
      * @return [Intent] which will be fired. Return null if activity
      *    shouldn't be intercepted.
      */
-    Intent interceptActivity(ActivityInterceptorInfo info);
+    Intent interceptActivity(ActivityInterceptorInfo info, IntentSender target);
 
     /**
      * Get the list of applications hidden from launcher.

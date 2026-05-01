@@ -695,8 +695,15 @@ class ActivityStartInterceptor {
 
     private boolean interceptLockedAppIfNeeded() {
         if (getAppLockManagerService() == null) return false;
-        final Intent interceptingIntent = getAppLockManagerService().interceptActivity(getInterceptorInfo(null));
+        // Save mActivityOptions because createIntentSenderForOriginalIntent() may mutate it
+        // (via deferCrossProfileAppsAnimationIfNecessary). Restore if AppLock doesn't intercept.
+        final ActivityOptions savedOptions = mActivityOptions;
+        final IntentSender target = createIntentSenderForOriginalIntent(mCallingUid,
+                FLAG_CANCEL_CURRENT | FLAG_ONE_SHOT | FLAG_IMMUTABLE);
+        final Intent interceptingIntent = getAppLockManagerService().interceptActivity(
+                getInterceptorInfo(null), target);
         if (interceptingIntent == null) {
+            mActivityOptions = savedOptions;
             return false;
         }
         mIntent = interceptingIntent;
