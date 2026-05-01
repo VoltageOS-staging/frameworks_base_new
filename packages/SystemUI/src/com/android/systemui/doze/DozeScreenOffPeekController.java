@@ -22,7 +22,6 @@ import android.hardware.display.AmbientDisplayConfiguration;
 import android.os.Handler;
 import android.pocket.PocketManager;
 import android.provider.Settings;
-import android.text.format.DateUtils;
 
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.doze.dagger.DozeScope;
@@ -39,7 +38,6 @@ import javax.inject.Inject;
 @DozeScope
 public class DozeScreenOffPeekController implements DozeMachine.Part {
     private static final String TAG = "DozeScreenOffPeek";
-    private static final long PEEK_DURATION_MS = 5 * DateUtils.SECOND_IN_MILLIS;
 
     private final Context mContext;
     private final AmbientDisplayConfiguration mConfig;
@@ -75,7 +73,8 @@ public class DozeScreenOffPeekController implements DozeMachine.Part {
                 mMachine.requestState(DozeMachine.State.DOZE);
                 return;
             }
-            mPeekTimeout.schedule(PEEK_DURATION_MS, AlarmTimeout.MODE_RESCHEDULE_IF_SCHEDULED);
+            mPeekTimeout.schedule(getPeekDurationMillis(),
+                    AlarmTimeout.MODE_RESCHEDULE_IF_SCHEDULED);
             return;
         }
         mPeekTimeout.cancel();
@@ -85,6 +84,7 @@ public class DozeScreenOffPeekController implements DozeMachine.Part {
     public void dump(PrintWriter pw) {
         pw.println("DozeScreenOffPeekController:");
         pw.println(" enabled=" + shouldRunPeek());
+        pw.println(" durationMs=" + getPeekDurationMillis());
     }
 
     private boolean shouldRunPeek() {
@@ -96,6 +96,10 @@ public class DozeScreenOffPeekController implements DozeMachine.Part {
         final boolean pocketJudgeEnabled = Settings.System.getIntForUser(
                 mContext.getContentResolver(), Settings.System.POCKET_JUDGE, 0, userId) == 1;
         return pocketJudgeEnabled && mPocketManager != null && mPocketManager.isDeviceInPocket();
+    }
+
+    private long getPeekDurationMillis() {
+        return mConfig.getScreenOffPeekDurationMillis(mUserTracker.getUserId());
     }
 
     private void onTimeout() {
