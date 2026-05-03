@@ -55,6 +55,9 @@ class PulseViewController @Inject constructor(
             setDataListener(this@PulseViewController)
         }
 
+    private val bassHaptics: PulseBassHaptics =
+        PulseBassHaptics(context)
+
     val pulseEnabled: Boolean
         get() = settingsRepository.isPulseEnabled()
 
@@ -66,6 +69,9 @@ class PulseViewController @Inject constructor(
 
     private val isCollapsed: Boolean
         get() = ScrimUtils.get().isPanelFullyCollapsed()
+
+    private val isHapticsEnabled: Boolean
+        get() = settingsRepository.isPulseHapticsEnabled()
 
     var pulseRunning: Boolean = false
         set(value) {
@@ -192,12 +198,20 @@ class PulseViewController @Inject constructor(
             navbarView?.setVisibility(show && runOnNavbar)
             floatingPulseView?.setVisibility(show && runOnNavbar)
 
-            if (show) audioProcessor.startCapture()
-            else audioProcessor.stopCapture()
+            view.setVisibility(show)
+            if (pulseEnabled && (show || isHapticsEnabled)) {
+                audioProcessor.startCapture()
+            } else {
+                audioProcessor.stopCapture()
+                bassHaptics.reset()
+            }
         }
     }
 
     override fun onDataUpdate(data: PulseData) {
+        if (isHapticsEnabled) {
+            bassHaptics.process(data.fftBytes)
+        }
         if (pulseRunning) {
             mainScope.launch { 
                 view.updateVisualizerData(data) 
@@ -267,6 +281,7 @@ class PulseViewController @Inject constructor(
 
     override fun onUserChanged() {
         settingsRepository.invalidateCache()
+        bassHaptics.reset()
         updateState()
     }
 
@@ -279,6 +294,7 @@ class PulseViewController @Inject constructor(
             listenersRegistered = false
         }
         audioProcessor.cleanup()
+        bassHaptics.reset()
         mainScope.cancel()
     }
 
