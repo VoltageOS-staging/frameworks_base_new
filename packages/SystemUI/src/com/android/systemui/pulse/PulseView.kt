@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2025 The AxionAOSP Project
+ *           (C) 2026 VoltageOS
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +34,8 @@ class PulseView @JvmOverloads constructor(
     private var isVisible = false
     private var settingsRepo: PulseSettingsRepository? = null
 
+    private var navbarMode = false
+
     init {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -47,6 +50,18 @@ class PulseView @JvmOverloads constructor(
         engine = PulseEngine(context, settingsRepo) { processedHeights ->
             renderer?.updateHeights(processedHeights)
             postInvalidate()
+        }
+    }
+
+    fun setNavbarMode(enabled: Boolean) {
+        navbarMode = enabled
+        engine?.setViewHeight(if (enabled && height > 0) height else 0)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (navbarMode && h > 0) {
+            engine?.setViewHeight(h)
         }
     }
 
