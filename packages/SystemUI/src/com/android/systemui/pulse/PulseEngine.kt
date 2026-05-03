@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2025 The AxionAOSP Project
+ *           (C) 2026 VoltageOS
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +32,12 @@ class PulseEngine(
     private var fftAverage: Array<FFTAverage>? = null
     private val fudgeFactor = 20
 
+    @Volatile private var viewHeight = 0
+
+    private val maxDb = 45f
+
+    fun setViewHeight(h: Int) { viewHeight = h }
+
     private val fftChannel = Channel<ByteArray>(capacity = Channel.CONFLATED)
 
     init {
@@ -60,7 +67,11 @@ class PulseEngine(
             val magnitude = (rfk * rfk + ifk * ifk).toFloat()
             var dbValue = if (magnitude > 0) (10 * log10(magnitude.toDouble())).toInt() else 0
             dbValue = fftAverage!![i].average(dbValue)
-            output[i] = dbValue * fudgeFactor.toFloat()
+            output[i] = if (viewHeight > 0) {
+                (dbValue.toFloat() / maxDb) * viewHeight
+            } else {
+                dbValue * fudgeFactor.toFloat()
+            }
         }
         withContext(Dispatchers.Main) {
             onDataProcessed(output)

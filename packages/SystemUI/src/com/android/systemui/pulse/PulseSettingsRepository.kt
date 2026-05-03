@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2025 The AxionAOSP Project
  *           (C) 2025 crDroid Android Project
+ *           (C) 2026 VoltageOS
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +34,11 @@ class PulseSettingsRepository(private val context: Context) {
         private const val PULSE_ROUNDED_BARS = Settings.Secure.PULSE_ROUNDED_BARS
         private const val PULSE_COLOR = Settings.Secure.PULSE_COLOR
         private const val PULSE_RENDERER = Settings.Secure.PULSE_RENDERER
+        const val PULSE_NAVBAR_ENABLED = Settings.Secure.NAVBAR_PULSE_ENABLED
 
         private const val DEFAULT_ENABLED = false
         private const val DEFAULT_AMBIENT_ENABLED = true
+        private const val DEFAULT_NAVBAR_ENABLED = false
         private const val DEFAULT_BAR_COUNT = 32
         private const val DEFAULT_ROUNDED_BARS = false
         private const val DEFAULT_COLOR = "lavalamp"
@@ -52,6 +55,7 @@ class PulseSettingsRepository(private val context: Context) {
     private var cachedRoundedBars: Boolean? = null
     private var cachedColorMode: String? = null
     private var cachedRenderer: String? = null
+    private var cachedNavbarEnabled: Boolean? = null
 
     fun startObserving() {
         if (settingsObserver != null) return
@@ -64,7 +68,8 @@ class PulseSettingsRepository(private val context: Context) {
             Settings.Secure.getUriFor(PULSE_BAR_COUNT),
             Settings.Secure.getUriFor(PULSE_ROUNDED_BARS),
             Settings.Secure.getUriFor(PULSE_COLOR),
-            Settings.Secure.getUriFor(PULSE_RENDERER)
+            Settings.Secure.getUriFor(PULSE_RENDERER),
+            Settings.Secure.getUriFor(PULSE_NAVBAR_ENABLED)
         ).forEach { uri ->
             context.contentResolver.registerContentObserver(uri, false,
                 settingsObserver!!, UserHandle.USER_ALL)
@@ -94,6 +99,13 @@ class PulseSettingsRepository(private val context: Context) {
             cachedAmbientEnabled = getSecureSetting(PULSE_AMBIENT_ENABLED, DEFAULT_AMBIENT_ENABLED)
         }
         return cachedAmbientEnabled!!
+    }
+
+    fun isPulseNavbarEnabled(): Boolean {
+        if (cachedNavbarEnabled == null) {
+            cachedNavbarEnabled = getSecureSetting(PULSE_NAVBAR_ENABLED, DEFAULT_NAVBAR_ENABLED)
+        }
+        return cachedNavbarEnabled!!
     }
 
     fun getBarCount(): Int {
@@ -136,6 +148,7 @@ class PulseSettingsRepository(private val context: Context) {
         cachedRoundedBars = null
         cachedColorMode = null
         cachedRenderer = null
+        cachedNavbarEnabled = null
         onSettingsChangedListener?.invoke()
     }
 
