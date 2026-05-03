@@ -14478,6 +14478,12 @@ public final class Settings {
         public static final String LOCKSCREEN_PULSE_ENABLED = "lockscreen_pulse_enabled";
 
         /**
+         * Pulse lockscreen music visualizer
+         * @hide
+         */
+        public static final String NAVBAR_PULSE_ENABLED = "navbar_pulse_enabled";
+
+        /**
          * Pulse lockscreen music visualizer on ambient display
          * @hide
          */

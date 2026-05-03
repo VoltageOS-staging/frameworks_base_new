@@ -85,6 +85,7 @@ import com.android.systemui.statusbar.phone.LightBarTransitionsController;
 import com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager;
 import com.android.wm.shell.back.BackAnimation;
 import com.android.wm.shell.pip.Pip;
+import com.android.systemui.pulse.PulseViewController;
 
 import java.io.PrintWriter;
 import java.util.Optional;
@@ -187,12 +188,14 @@ public class TaskbarDelegate implements CommandQueue.Callbacks,
     private final StatusBarStateController mStatusBarStateController;
     private DisplayTracker mDisplayTracker;
     private final Handler mBgHandler;
+    private final PulseViewController mPulseViewController;
 
     @Inject
     public TaskbarDelegate(Context context,
             LightBarTransitionsController.Factory lightBarTransitionsControllerFactory,
             StatusBarKeyguardViewManager statusBarKeyguardViewManager,
             StatusBarStateController statusBarStateController,
+            PulseViewController pulseViewController,
             @Background Handler bgHandler) {
         mLightBarTransitionsControllerFactory = lightBarTransitionsControllerFactory;
 
@@ -205,6 +208,7 @@ public class TaskbarDelegate implements CommandQueue.Callbacks,
         mStatusBarKeyguardViewManager = statusBarKeyguardViewManager;
         mStatusBarKeyguardViewManager.setTaskbarDelegate(this);
         mStatusBarStateController = statusBarStateController;
+        mPulseViewController = pulseViewController;
     }
 
     public void setDependencies(CommandQueue commandQueue,
@@ -325,6 +329,7 @@ public class TaskbarDelegate implements CommandQueue.Callbacks,
             mEdgeBackGestureHandler.setBackAnimation(mBackAnimation);
             mTaskStackChangeListeners.registerTaskStackListener(mTaskStackListener);
             mInitialized = true;
+            mPulseViewController.attachTaskbarPulse(mWindowContext);
         } finally {
             Trace.endSection();
         }
@@ -346,6 +351,7 @@ public class TaskbarDelegate implements CommandQueue.Callbacks,
         mPipOptional.ifPresent(this::removePipExclusionBoundsChangeListener);
         mTaskStackChangeListeners.unregisterTaskStackListener(mTaskStackListener);
         mInitialized = false;
+        mPulseViewController.detachTaskbarPulse(mWindowContext);
     }
 
     void addPipExclusionBoundsChangeListener(Pip pip) {
