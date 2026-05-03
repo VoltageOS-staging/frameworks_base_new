@@ -53,6 +53,13 @@ class PulseView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Returns a snapshot of the last processed heights from the engine.
+     * Used by PulseViewController to forward data to Launcher3 via ILauncherProxy.
+     * Returns null if engine is not yet initialized.
+     */
+    fun getLastHeights(): FloatArray? = engine?.getLastHeights()
+
     fun setNavbarMode(enabled: Boolean) {
         navbarMode = enabled
         engine?.setViewHeight(if (enabled && height > 0) height else 0)
@@ -86,7 +93,7 @@ class PulseView @JvmOverloads constructor(
     }
 
     fun updateVisualizerData(data: PulseData) {
-        if (isAttached && isVisible && data.isDataValid) {
+        if (isAttached && (isVisible || navbarMode) && data.isDataValid) {
             engine?.processFFT(data.fftBytes!!)
         }
     }

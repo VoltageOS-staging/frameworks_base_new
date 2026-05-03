@@ -32,6 +32,9 @@ class PulseEngine(
     private var fftAverage: Array<FFTAverage>? = null
     private val fudgeFactor = 20
 
+    @Volatile private var lastHeights: FloatArray = FloatArray(0)
+    fun getLastHeights(): FloatArray = lastHeights.copyOf()
+
     @Volatile private var viewHeight = 0
 
     private val maxDb = 45f
@@ -73,6 +76,7 @@ class PulseEngine(
                 dbValue * fudgeFactor.toFloat()
             }
         }
+        lastHeights = output.copyOf()
         withContext(Dispatchers.Main) {
             onDataProcessed(output)
         }

@@ -21,6 +21,7 @@ import android.content.Context
 import android.media.session.PlaybackState
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.media.MediaSessionManager
+import com.android.systemui.LauncherProxyService
 import com.android.systemui.util.ScrimUtils
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -32,7 +33,8 @@ import android.graphics.PixelFormat
 
 @SysUISingleton
 class PulseViewController @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val launcherProxyService: LauncherProxyService
 ) : PulseAudioDataProcessor.DataListener,
     MediaSessionManager.MediaDataListener,
     ScrimUtils.ScrimEventListener {
@@ -44,6 +46,9 @@ class PulseViewController @Inject constructor(
     private var bouncerShowingOrKeyguardDismissing = false
     private var keyguardShowing = false
     private var isDozing = false
+
+    private var lastMediaColor: Int = 0
+
     private var isScreenOff = false
 
     private val settingsRepository: PulseSettingsRepository =
@@ -201,7 +206,10 @@ class PulseViewController @Inject constructor(
             
             view.setVisibility(show && runOnLockscreen)
             navbarView?.setVisibility(show && runOnNavbar)
-            floatingPulseView?.setVisibility(show && runOnNavbar)
+            floatingPulseView?.setVisibility(false)
+            if (!show && navbarEnabled) {
+                launcherProxyService.hidePulse()
+            }
 
             view.setVisibility(show)
             if (pulseEnabled && (show || hapticsMode > 1)) {
@@ -222,6 +230,13 @@ class PulseViewController @Inject constructor(
                 view.updateVisualizerData(data) 
                 navbarView?.updateVisualizerData(data)
                 floatingPulseView?.updateVisualizerData(data)
+                if (navbarEnabled && !keyguardShowing && !isDozing) {
+                    floatingPulseView?.getLastHeights()?.let { heights ->
+                        if (heights.isNotEmpty()) {
+                            launcherProxyService.sendPulseData(heights, lastMediaColor)
+                        }
+                    }
+                }
             }
         }
     }
@@ -233,6 +248,7 @@ class PulseViewController @Inject constructor(
 
     override fun onMediaColorsChanged(color: Int) {
         if (pulseEnabled) {
+            lastMediaColor = color
             view.onMediaColorsChanged(color)
             navbarView?.onMediaColorsChanged(color)
             floatingPulseView?.onMediaColorsChanged(color)

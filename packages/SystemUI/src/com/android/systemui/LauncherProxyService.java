@@ -1381,6 +1381,23 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
         }
     }
 
+    public void sendPulseData(float[] heights, int color) {
+        try {
+            if (mLauncherProxy != null) {
+               mLauncherProxy.onPulseData(heights, color);
+            }
+        } catch (RemoteException e) {
+            Log.e(TAG_OPS, "Failed to call onPulseData()", e);
+        }
+    }
+
+    /**
+     * Sends an empty heights array to signal Launcher3 to hide the pulse view.
+     */
+    public void hidePulse() {
+        sendPulseData(new float[0], 0);
+    }
+
     private void updateEnabledState() {
         final int currentUser = mUserTracker.getUserId();
         mIsEnabled = mContext.getPackageManager().resolveServiceAsUser(mQuickStepIntent,

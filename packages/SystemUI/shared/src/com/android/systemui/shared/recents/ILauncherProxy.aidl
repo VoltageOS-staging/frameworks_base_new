@@ -165,4 +165,11 @@ oneway interface ILauncherProxy {
      * {@link ActionCornerConstants.Action} for all possible actions.
      */
     void onActionCornerActivated(int action, int displayId) = 39;
+
+    /**
+     * Called by SystemUI to push processed pulse bar heights and current media color.
+     * heights[i] is already scaled to the target view height — no FFT math needed in Launcher3.
+     * An empty heights array is the stop/hide signal.
+     */
+    void onPulseData(in float[] heights, int color) = 40;
 }
