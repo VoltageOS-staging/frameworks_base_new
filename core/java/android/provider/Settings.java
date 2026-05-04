@@ -14484,6 +14484,13 @@ public final class Settings {
         public static final String NAVBAR_PULSE_ENABLED = "navbar_pulse_enabled";
 
         /**
+         * Limit navbar pulse visualizer to the navbar/handle width only.
+         * 0 = full width (default), 1 = narrow (navbar width only)
+         * @hide
+         */
+        public static final String NAVBAR_PULSE_NARROW = "navbar_pulse_narrow";
+
+        /**
          * Pulse lockscreen music visualizer on ambient display
          * @hide
          */

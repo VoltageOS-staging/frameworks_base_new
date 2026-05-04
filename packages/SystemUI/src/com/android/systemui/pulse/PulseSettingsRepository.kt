@@ -35,11 +35,13 @@ class PulseSettingsRepository(private val context: Context) {
         private const val PULSE_COLOR = Settings.Secure.PULSE_COLOR
         private const val PULSE_RENDERER = Settings.Secure.PULSE_RENDERER
         const val PULSE_NAVBAR_ENABLED = Settings.Secure.NAVBAR_PULSE_ENABLED
+        private const val PULSE_NAVBAR_NARROW = Settings.Secure.NAVBAR_PULSE_NARROW
         private const val PULSE_BASS_HAPTICS = Settings.Secure.PULSE_BASS_HAPTICS
 
         private const val DEFAULT_ENABLED = false
         private const val DEFAULT_AMBIENT_ENABLED = true
         private const val DEFAULT_NAVBAR_ENABLED = false
+        private const val DEFAULT_NAVBAR_NARROW = false
         private const val DEFAULT_BAR_COUNT = 32
         private const val DEFAULT_ROUNDED_BARS = false
         private const val DEFAULT_COLOR = "lavalamp"
@@ -58,6 +60,7 @@ class PulseSettingsRepository(private val context: Context) {
     private var cachedColorMode: String? = null
     private var cachedRenderer: String? = null
     private var cachedNavbarEnabled: Boolean? = null
+    private var cachedNavbarNarrow: Boolean? = null
     private var cachedHapticsMode: Int? = null
 
     fun startObserving() {
@@ -73,6 +76,7 @@ class PulseSettingsRepository(private val context: Context) {
             Settings.Secure.getUriFor(PULSE_COLOR),
             Settings.Secure.getUriFor(PULSE_RENDERER),
             Settings.Secure.getUriFor(PULSE_NAVBAR_ENABLED),
+            Settings.Secure.getUriFor(PULSE_NAVBAR_NARROW),
             Settings.Secure.getUriFor(PULSE_BASS_HAPTICS)
         ).forEach { uri ->
             context.contentResolver.registerContentObserver(uri, false,
@@ -110,6 +114,13 @@ class PulseSettingsRepository(private val context: Context) {
             cachedNavbarEnabled = getSecureSetting(PULSE_NAVBAR_ENABLED, DEFAULT_NAVBAR_ENABLED)
         }
         return cachedNavbarEnabled!!
+    }
+
+    fun isPulseNavbarNarrow(): Boolean {
+        if (cachedNavbarNarrow == null) {
+            cachedNavbarNarrow = getSecureSetting(PULSE_NAVBAR_NARROW, DEFAULT_NAVBAR_NARROW)
+        }
+        return cachedNavbarNarrow!!
     }
 
     fun getBarCount(): Int {
@@ -162,6 +173,7 @@ class PulseSettingsRepository(private val context: Context) {
         cachedColorMode = null
         cachedRenderer = null
         cachedNavbarEnabled = null
+        cachedNavbarNarrow = null
         cachedHapticsMode = null
         onSettingsChangedListener?.invoke()
     }
