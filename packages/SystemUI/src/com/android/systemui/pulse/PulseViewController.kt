@@ -116,6 +116,17 @@ class PulseViewController @Inject constructor(
     private var navbarView: PulseView? = null
     private var floatingPulseView: PulseView? = null
     private var taskbarWm: WindowManager? = null
+
+    /** Dedicated engine for the launcher navbar pulse path. Runs independently of PulseView. */
+    private val navbarPulseEngine: PulseEngine = PulseEngine(
+        context,
+        settingsRepository
+    ) { heights ->
+        // Called on main thread after each FFT frame when navbar pulse is active.
+        if (navbarEnabled && !keyguardShowing && !isDozing && pulseRunning) {
+            launcherProxyService.sendPulseData(heights, lastMediaColor)
+        }
+    }
     
     fun attachNavbarView(v: PulseView) {
         navbarView = v
@@ -187,9 +198,9 @@ class PulseViewController @Inject constructor(
             mainScope.launch {
                 view.setVisibility(false)
                 navbarView?.setVisibility(false)
-                floatingPulseView?.setVisibility(false)
                 audioProcessor.stopCapture()
             }
+            launcherProxyService.hidePulse()
         }
         updateState()
         // Force update
@@ -201,17 +212,16 @@ class PulseViewController @Inject constructor(
             val runOnLockscreen = !bouncerShowingOrKeyguardDismissing
                     && isCollapsed
                     && ((keyguardShowing && !isDozing) || (isDozing && ambientEnabled))
-            
+
             val runOnNavbar = navbarEnabled && !keyguardShowing && !isDozing
-            
+
             view.setVisibility(show && runOnLockscreen)
             navbarView?.setVisibility(show && runOnNavbar)
-            floatingPulseView?.setVisibility(false)
+
             if (!show && navbarEnabled) {
                 launcherProxyService.hidePulse()
             }
 
-            view.setVisibility(show)
             if (pulseEnabled && (show || hapticsMode > 1)) {
                 audioProcessor.startCapture()
             } else {
@@ -226,16 +236,13 @@ class PulseViewController @Inject constructor(
             bassHaptics.process(data.fftBytes)
         }
         if (pulseRunning) {
-            mainScope.launch { 
-                view.updateVisualizerData(data) 
+            mainScope.launch {
+                view.updateVisualizerData(data)
                 navbarView?.updateVisualizerData(data)
-                floatingPulseView?.updateVisualizerData(data)
-                if (navbarEnabled && !keyguardShowing && !isDozing) {
-                    floatingPulseView?.getLastHeights()?.let { heights ->
-                        if (heights.isNotEmpty()) {
-                            launcherProxyService.sendPulseData(heights, lastMediaColor)
-                        }
-                    }
+                // Feed FFT directly into the dedicated navbar engine.
+                // Its callback will call sendPulseData if conditions are still met.
+                if (navbarEnabled && !keyguardShowing && !isDozing && data.isDataValid) {
+                    data.fftBytes?.let { navbarPulseEngine.processFFT(it) }
                 }
             }
         }
@@ -251,7 +258,6 @@ class PulseViewController @Inject constructor(
             lastMediaColor = color
             view.onMediaColorsChanged(color)
             navbarView?.onMediaColorsChanged(color)
-            floatingPulseView?.onMediaColorsChanged(color)
         }
     }
 
@@ -316,6 +322,7 @@ class PulseViewController @Inject constructor(
             MediaSessionManager.get().removeListener(this)
             listenersRegistered = false
         }
+        navbarPulseEngine.stop()
         audioProcessor.cleanup()
         bassHaptics.reset()
         mainScope.cancel()

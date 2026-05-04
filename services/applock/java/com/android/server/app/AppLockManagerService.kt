@@ -1067,19 +1067,26 @@ class AppLockManagerService(
         }
         enforceCallingPermission("unlockPackage")
         val actualUserId = getActualUserId(userId, "unlockPackage")
-        serviceScope.launch {
+        var unlocked = false
+        runBlocking {
             mutex.withLock {
                 val config = userConfigMap[actualUserId] ?: run {
                     Slog.e(TAG, "unlockPackage requested by unknown user id $actualUserId")
-                    return@launch
+                    return@withLock
                 }
                 if (!config.shouldProtectApp(packageName)) {
                     Slog.w(TAG, "Unlock requested for package $packageName " +
                         "that is not in list")
-                    return@launch
+                    return@withLock
                 }
                 unlockedPackages.add(packageName)
+                unlocked = true
             }
+        }
+        if (!unlocked) {
+            return
+        }
+        serviceScope.launch {
             notificationManagerInternal.updateSecureNotifications(
                 packageName,
                 false /* isContentSecure */,
