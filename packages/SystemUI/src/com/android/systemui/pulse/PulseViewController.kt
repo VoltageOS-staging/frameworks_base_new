@@ -199,8 +199,8 @@ class PulseViewController @Inject constructor(
                 view.setVisibility(false)
                 navbarView?.setVisibility(false)
                 audioProcessor.stopCapture()
+                launcherProxyService.hidePulse()
             }
-            launcherProxyService.hidePulse()
         }
         updateState()
         // Force update
@@ -322,7 +322,6 @@ class PulseViewController @Inject constructor(
             MediaSessionManager.get().removeListener(this)
             listenersRegistered = false
         }
-        navbarPulseEngine.stop()
         audioProcessor.cleanup()
         bassHaptics.reset()
         mainScope.cancel()
