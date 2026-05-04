@@ -1475,6 +1475,11 @@ class AppLockManagerService(
                 "interceptActivity, pkg = $packageName"
             }
             if (!requireUnlock(packageName, info.userId)) return null
+            val targetOptions = ActivityOptions.fromBundle(info.checkedOptions?.toBundle())
+                ?: ActivityOptions.makeBasic()
+            targetOptions.setPendingIntentBackgroundActivityStartMode(
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_SYSTEM_DEFINED
+            )
             val target = IntentSender(
                 atmInternal.getIntentSender(
                     ActivityManager.INTENT_SENDER_ACTIVITY,
@@ -1490,7 +1495,7 @@ class AppLockManagerService(
                     PendingIntent.FLAG_CANCEL_CURRENT or
                         PendingIntent.FLAG_ONE_SHOT or
                         PendingIntent.FLAG_IMMUTABLE,
-                    ActivityOptions.makeBasic().toBundle()
+                    targetOptions.toBundle()
                 )
             )
             val intent = Intent(AppLockManager.ACTION_UNLOCK_APP)
