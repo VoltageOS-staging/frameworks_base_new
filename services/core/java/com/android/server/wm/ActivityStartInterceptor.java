@@ -719,9 +719,11 @@ class ActivityStartInterceptor {
                 mIntent.putExtra(EXTRA_TASK_ID, parentTask.mTaskId);
             }
         }
-        if (mActivityOptions == null) {
-            mActivityOptions = ActivityOptions.makeBasic();
-        }
+        // The original launch options may contain bubble-specific state such as the launch cookie
+        // and bubble root task. Those options are saved on the pending target by AppLockManager;
+        // applying them to the credential activity would consume the bubble launch before the
+        // protected app is restarted after unlock.
+        mActivityOptions = ActivityOptions.makeBasic();
 
         final UserInfo parent = mUserManager.getProfileParent(mUserId);
         if (parent != null) {
