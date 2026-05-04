@@ -1492,7 +1492,7 @@ class AppLockManagerService(
                     ActivityManager.INTENT_SENDER_ACTIVITY,
                     info.callingPackage,
                     info.callingFeatureId,
-                    info.callingPid,
+                    info.callingUid,
                     info.userId,
                     null /* token */,
                     null /* resultCode */,
