@@ -329,6 +329,8 @@ public class TaskbarDelegate implements CommandQueue.Callbacks,
             mEdgeBackGestureHandler.setBackAnimation(mBackAnimation);
             mTaskStackChangeListeners.registerTaskStackListener(mTaskStackListener);
             mInitialized = true;
+            // Pulse visualizer is now rendered inside TaskbarDragLayer via LauncherProxyService;
+            // attachTaskbarPulse is a no-op but kept for API compatibility.
             mPulseViewController.attachTaskbarPulse(mWindowContext);
         } finally {
             Trace.endSection();
@@ -351,7 +353,8 @@ public class TaskbarDelegate implements CommandQueue.Callbacks,
         mPipOptional.ifPresent(this::removePipExclusionBoundsChangeListener);
         mTaskStackChangeListeners.unregisterTaskStackListener(mTaskStackListener);
         mInitialized = false;
-        mPulseViewController.detachTaskbarPulse(mWindowContext);
+        // mWindowContext was nulled above; pass context so detachTaskbarPulse can send stop signal.
+        mPulseViewController.detachTaskbarPulse(mContext);
     }
 
     void addPipExclusionBoundsChangeListener(Pip pip) {

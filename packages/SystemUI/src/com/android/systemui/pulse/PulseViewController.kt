@@ -19,6 +19,7 @@ package com.android.systemui.pulse
 
 import android.content.Context
 import android.media.session.PlaybackState
+import com.android.systemui.LauncherProxyService
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.media.MediaSessionManager
 import com.android.systemui.util.ScrimUtils
@@ -26,13 +27,11 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import android.view.WindowManager
-import android.view.Gravity
-import android.graphics.PixelFormat
 
 @SysUISingleton
 class PulseViewController @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val launcherProxyService: LauncherProxyService
 ) : PulseAudioDataProcessor.DataListener,
     MediaSessionManager.MediaDataListener,
     ScrimUtils.ScrimEventListener {
@@ -109,9 +108,10 @@ class PulseViewController @Inject constructor(
     }
 
     private var navbarView: PulseView? = null
-    private var floatingPulseView: PulseView? = null
-    private var taskbarWm: WindowManager? = null
-    
+
+    /** Last known media album-art colour forwarded to the Launcher pulse renderer. */
+    private var lastMediaColor = 0
+
     fun attachNavbarView(v: PulseView) {
         navbarView = v
         v.initialize(settingsRepository)
@@ -121,51 +121,24 @@ class PulseViewController @Inject constructor(
             v.setVisibility(pulseRunning && navbarEnabled && !keyguardShowing && !isDozing)
         }
     }
-    
+
     fun detachNavbarView() {
         navbarView = null
     }
 
-    fun attachTaskbarPulse(windowContext: Context) {
-        if (floatingPulseView != null) return
-        val navPanelContext = windowContext.createWindowContext(
-            windowContext.display,
-            WindowManager.LayoutParams.TYPE_NAVIGATION_BAR_PANEL,
-            null
-        )
-        val wm = navPanelContext.getSystemService(WindowManager::class.java)
-        taskbarWm = wm
-        floatingPulseView = PulseView(navPanelContext)
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            navPanelContext.resources.getDimensionPixelSize(com.android.internal.R.dimen.navigation_bar_height),
-            WindowManager.LayoutParams.TYPE_NAVIGATION_BAR_PANEL,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        params.title = "PulseTaskbarOverlay"
-        params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-        
-        wm?.addView(floatingPulseView, params)
-        
-        floatingPulseView?.initialize(settingsRepository)
-        floatingPulseView?.setNavbarMode(true)
-        updateState()
-        mainScope.launch {
-            floatingPulseView?.setVisibility(pulseRunning && navbarEnabled && !keyguardShowing && !isDozing)
-        }
+    /**
+     * No-op: the old WindowManager overlay approach has been replaced by sending FFT data
+     * through [LauncherProxyService.sendPulseData] so that Launcher can render the visualizer
+     * directly inside TaskbarDragLayer, behind the pill/3-button row.
+     */
+    fun attachTaskbarPulse(@Suppress("UNUSED_PARAMETER") windowContext: Context) {
+        // Data propagation is driven by onDataUpdate(); nothing to attach here.
     }
 
-    fun detachTaskbarPulse(windowContext: Context) {
-        floatingPulseView?.let {
-            taskbarWm?.removeView(it)
-        }
-        floatingPulseView = null
-        taskbarWm = null
+    /** @see attachTaskbarPulse */
+    fun detachTaskbarPulse(@Suppress("UNUSED_PARAMETER") windowContext: Context) {
+        // Send a stop signal so Launcher hides the visualizer immediately.
+        launcherProxyService.sendPulseData(null, false, 0)
     }
 
     private fun onSettingsChanged() {
@@ -182,7 +155,6 @@ class PulseViewController @Inject constructor(
             mainScope.launch {
                 view.setVisibility(false)
                 navbarView?.setVisibility(false)
-                floatingPulseView?.setVisibility(false)
                 audioProcessor.stopCapture()
             }
         }
@@ -196,14 +168,17 @@ class PulseViewController @Inject constructor(
             val runOnLockscreen = !bouncerShowingOrKeyguardDismissing
                     && isCollapsed
                     && ((keyguardShowing && !isDozing) || (isDozing && ambientEnabled))
-            
+
             val runOnNavbar = navbarEnabled && !keyguardShowing && !isDozing
-            
+
             view.setVisibility(show && runOnLockscreen)
             navbarView?.setVisibility(show && runOnNavbar)
-            floatingPulseView?.setVisibility(show && runOnNavbar)
 
-            view.setVisibility(show)
+            // Notify Launcher to show or hide the in-taskbar pulse view.
+            if (!show || !runOnNavbar) {
+                launcherProxyService.sendPulseData(null, false, lastMediaColor)
+            }
+
             if (pulseEnabled && (show || hapticsMode > 1)) {
                 audioProcessor.startCapture()
             } else {
@@ -218,10 +193,14 @@ class PulseViewController @Inject constructor(
             bassHaptics.process(data.fftBytes)
         }
         if (pulseRunning) {
-            mainScope.launch { 
-                view.updateVisualizerData(data) 
+            mainScope.launch {
+                view.updateVisualizerData(data)
                 navbarView?.updateVisualizerData(data)
-                floatingPulseView?.updateVisualizerData(data)
+            }
+            // Forward raw FFT data to Launcher so it can render the visualizer behind the
+            // taskbar pill.  Only send when navbar pulse is actually active.
+            if (navbarEnabled && !keyguardShowing && !isDozing && data.isDataValid) {
+                launcherProxyService.sendPulseData(data.fftBytes, true, lastMediaColor)
             }
         }
     }
@@ -232,10 +211,10 @@ class PulseViewController @Inject constructor(
     }
 
     override fun onMediaColorsChanged(color: Int) {
+        lastMediaColor = color
         if (pulseEnabled) {
             view.onMediaColorsChanged(color)
             navbarView?.onMediaColorsChanged(color)
-            floatingPulseView?.onMediaColorsChanged(color)
         }
     }
 
