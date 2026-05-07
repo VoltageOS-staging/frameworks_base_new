@@ -51,7 +51,6 @@ class PulseRenderer(
     }
 
     fun onDraw(canvas: Canvas, viewWidth: Int, viewHeight: Int) {
-        if (!settingsRepo.isPulseEnabled()) return
         if (lastViewW != viewWidth || lastViewH != viewHeight) {
             style.onSizeChanged(viewWidth, viewHeight)
             lastViewW = viewWidth
