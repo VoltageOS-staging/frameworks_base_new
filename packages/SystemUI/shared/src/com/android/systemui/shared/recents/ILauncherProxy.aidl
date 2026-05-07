@@ -23,7 +23,7 @@ import android.os.IRemoteCallback;
 import android.view.MotionEvent;
 import com.android.systemui.shared.recents.ISystemUiProxy;
 
-// Next ID: 40
+// Next ID: 41
 oneway interface ILauncherProxy {
 
     void onActiveNavBarRegionChanges(in Region activeRegion) = 11;
@@ -165,4 +165,12 @@ oneway interface ILauncherProxy {
      * {@link ActionCornerConstants.Action} for all possible actions.
      */
     void onActionCornerActivated(int action, int displayId) = 39;
+
+    /**
+     * Sent when the Pulse visualizer has new audio data.
+     * @param fftBytes Raw FFT byte array from the audio processor. Null when pulse stops.
+     * @param active   True if pulse is running; false means the visualizer should hide.
+     * @param mediaColor The current media album art color (ARGB).
+     */
+    void onPulseData(in byte[] fftBytes, boolean active, int mediaColor) = 40;
 }

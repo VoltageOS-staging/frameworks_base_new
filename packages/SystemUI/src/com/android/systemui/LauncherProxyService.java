@@ -1381,6 +1381,24 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
         }
     }
 
+    /**
+     * Forwards raw FFT audio data to Launcher so the Pulse visualizer can be rendered
+     * inside TaskbarDragLayer (behind the pill/nav buttons).
+     *
+     * @param fftBytes   Raw FFT byte array from the audio processor; {@code null} when stopping.
+     * @param active     {@code true} while the visualizer is running.
+     * @param mediaColor Current album-art color (ARGB); used by the renderer.
+     */
+    public void sendPulseData(byte[] fftBytes, boolean active, int mediaColor) {
+        try {
+            if (mLauncherProxy != null) {
+                mLauncherProxy.onPulseData(fftBytes, active, mediaColor);
+            }
+        } catch (RemoteException e) {
+            Log.w(TAG_OPS, "Failed to call onPulseData()", e);
+        }
+    }
+
     private void updateEnabledState() {
         final int currentUser = mUserTracker.getUserId();
         mIsEnabled = mContext.getPackageManager().resolveServiceAsUser(mQuickStepIntent,
