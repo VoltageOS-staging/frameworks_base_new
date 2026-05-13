@@ -96,6 +96,7 @@ import android.content.pm.IPackageManager;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManagerInternal;
 import android.content.res.Resources;
+import android.database.ContentObserver;
 import android.graphics.Point;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
@@ -119,6 +120,7 @@ import android.os.SystemProperties;
 import android.os.Trace;
 import android.os.UserHandle;
 import android.provider.DeviceConfig;
+import android.provider.Settings;
 import android.system.Os;
 import android.system.OsConstants;
 import android.text.TextUtils;
@@ -143,6 +145,7 @@ import com.android.internal.app.ProcessMap;
 import com.android.internal.os.Zygote;
 import com.android.internal.util.ArrayUtils;
 import com.android.internal.util.MemInfoReader;
+import com.android.internal.util.voltage.PowerhubAppOptionsUtils;
 import com.android.server.AppStateTracker;
 import com.android.server.LocalServices;
 import com.android.server.ServiceThread;
@@ -447,6 +450,8 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
     private boolean mVoldAppDataIsolationEnabled = false;
 
     private ArrayList<String> mAppDataIsolationAllowlistedApps;
+
+    private volatile String mPowerhubAppOptionsConfig = "";
 
     /**
      * Temporary to avoid allocations.  Protected by main lock.
@@ -909,6 +914,7 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
                 ANDROID_VOLD_APP_DATA_ISOLATION_ENABLED_PROPERTY, false);
         mAppDataIsolationAllowlistedApps = new ArrayList<>(
                 SystemConfig.getInstance().getAppDataIsolationWhitelistedApps());
+        registerPowerhubAppOptionsObserver();
 
         if (sKillHandler == null) {
             sKillThread = new ServiceThread(TAG + ":kill",
@@ -1016,6 +1022,7 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
     void onSystemReady() {
         mAppStartInfoTracker.onSystemReady();
         mAppExitInfoTracker.onSystemReady();
+        updatePowerhubAppOptionsConfig();
     }
 
     void applyDisplaySize(WindowManagerService wm) {
@@ -2442,9 +2449,9 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
     }
 
     private boolean needsStorageDataIsolation(StorageManagerInternal storageManagerInternal,
-            ProcessRecord app) {
+            ProcessRecord app, boolean forcedDataIsolation) {
         final int mountMode = app.getMountMode();
-        return mVoldAppDataIsolationEnabled && UserHandle.isApp(app.uid)
+        return (mVoldAppDataIsolationEnabled || forcedDataIsolation) && UserHandle.isApp(app.uid)
                 && !storageManagerInternal.isExternalStorageService(app.uid)
                 // Special mounting mode doesn't need to have data isolation as they won't
                 // access /mnt/user anyway.
@@ -2452,6 +2459,43 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
                 && mountMode != Zygote.MOUNT_EXTERNAL_PASS_THROUGH
                 && mountMode != Zygote.MOUNT_EXTERNAL_INSTALLER
                 && mountMode != Zygote.MOUNT_EXTERNAL_NONE;
+    }
+
+    private boolean isPowerhubDataIsolationEnabled(ProcessRecord app) {
+        if (app == null || app.info == null || TextUtils.isEmpty(app.info.packageName)) {
+            return false;
+        }
+        return PowerhubAppOptionsUtils.isDataIsolationEnabled(
+                mPowerhubAppOptionsConfig, app.info.packageName);
+    }
+
+    private void registerPowerhubAppOptionsObserver() {
+        updatePowerhubAppOptionsConfig();
+        mService.mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(PowerhubAppOptionsUtils.SETTING_APP_OPTIONS_CONFIG),
+                false,
+                new ContentObserver(mService.mHandler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        updatePowerhubAppOptionsConfig();
+                    }
+                },
+                UserHandle.USER_ALL);
+    }
+
+    private void updatePowerhubAppOptionsConfig() {
+        final long token = Binder.clearCallingIdentity();
+        try {
+            String config = Settings.Secure.getStringForUser(
+                    mService.mContext.getContentResolver(),
+                    PowerhubAppOptionsUtils.SETTING_APP_OPTIONS_CONFIG,
+                    UserHandle.USER_SYSTEM);
+            mPowerhubAppOptionsConfig = config != null ? config : "";
+        } catch (Exception e) {
+            mPowerhubAppOptionsConfig = "";
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
     }
 
     private Process.ProcessStartResult startProcess(HostingRecord hostingRecord, String entryPoint,
@@ -2473,10 +2517,12 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
             Map<String, Pair<String, Long>> pkgDataInfoMap;
             Map<String, Pair<String, Long>> allowlistedAppDataInfoMap;
             boolean bindMountAppStorageDirs = false;
-            boolean bindMountAppsData = mAppDataIsolationEnabled
+            final boolean forcedDataIsolation = isPowerhubDataIsolationEnabled(app);
+            boolean bindMountAppsData = (mAppDataIsolationEnabled || forcedDataIsolation)
                     && (UserHandle.isApp(app.uid) || UserHandle.isIsolated(app.uid)
                         || app.isSdkSandbox)
-                    && mPlatformCompat.isChangeEnabled(APP_DATA_DIRECTORY_ISOLATION, app.info);
+                    && (forcedDataIsolation
+                        || mPlatformCompat.isChangeEnabled(APP_DATA_DIRECTORY_ISOLATION, app.info));
 
             // Get all packages belongs to the same shared uid. sharedPackages is empty array
             // if it doesn't have shared uid.
@@ -2527,7 +2573,7 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
             int userId = UserHandle.getUserId(uid);
             StorageManagerInternal storageManagerInternal = LocalServices.getService(
                     StorageManagerInternal.class);
-            if (needsStorageDataIsolation(storageManagerInternal, app)) {
+            if (needsStorageDataIsolation(storageManagerInternal, app, forcedDataIsolation)) {
                 // We will run prepareStorageDirs() after we trigger zygote fork, so it won't
                 // slow down app starting speed as those dirs might not be cached.
                 if (pkgDataInfoMap != null && storageManagerInternal.isFuseMounted(userId)) {

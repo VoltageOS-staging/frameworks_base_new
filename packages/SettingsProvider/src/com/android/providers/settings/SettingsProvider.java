@@ -129,6 +129,7 @@ import com.android.internal.content.PackageMonitor;
 import com.android.internal.display.RefreshRateSettingsUtils;
 import com.android.internal.os.BackgroundThread;
 import com.android.internal.util.FrameworkStatsLog;
+import com.android.internal.util.voltage.PowerhubAppOptionsUtils;
 import com.android.providers.settings.SettingsState.Setting;
 
 import com.google.android.collect.Sets;
@@ -453,6 +454,13 @@ public class SettingsProvider extends ContentProvider {
     public Bundle call(String method, String name, Bundle args) {
         final @CanBeCURRENT @UserIdInt int requestingUserId = getRequestingUserId(args);
         final int callingDeviceId = getDeviceId();
+        if (isPowerhubSpoofableGetMethod(method) && name != null) {
+            String spoofedValue = getPowerhubSpoofedValue(name);
+            if (spoofedValue != null) {
+                return Bundle.forPair(Settings.NameValueTable.VALUE, spoofedValue);
+            }
+        }
+
         switch (method) {
             case Settings.CALL_METHOD_GET_CONFIG -> {
                 Setting setting = getConfigSetting(name);
@@ -648,6 +656,13 @@ public class SettingsProvider extends ContentProvider {
         // If a legacy table that is gone, done.
         if (REMOVED_LEGACY_TABLES.contains(args.table)) {
             return new MatrixCursor(normalizedProjection, 0);
+        }
+
+        if (args.name != null && isPowerhubSpoofableTable(args.table)) {
+            String spoofedValue = getPowerhubSpoofedValue(args.name);
+            if (spoofedValue != null) {
+                return packageSpoofedSettingForQuery(args.name, normalizedProjection, spoofedValue);
+            }
         }
 
         final int callingDeviceId = getDeviceId();
@@ -1531,6 +1546,8 @@ public class SettingsProvider extends ContentProvider {
             MatrixCursor result = new MatrixCursor(normalizedProjection, nameCount);
 
             // Anyone can get the global settings, so no security checks.
+            final String powerhubConfig = getPowerhubAppOptionsConfigLocked();
+            final String callingPackage = getCallingPackage();
             for (int i = 0; i < nameCount; i++) {
                 String name = names.get(i);
                 try {
@@ -1541,7 +1558,9 @@ public class SettingsProvider extends ContentProvider {
                     continue;
                 }
                 Setting setting = settingsState.getSettingLocked(name);
-                appendSettingToCursor(result, setting);
+                appendSettingToCursor(result, setting,
+                        PowerhubAppOptionsUtils.getSpoofedSetting(powerhubConfig, callingPackage,
+                                name));
             }
 
             return result;
@@ -1711,6 +1730,8 @@ public class SettingsProvider extends ContentProvider {
             String[] normalizedProjection = normalizeProjection(projection);
             MatrixCursor result = new MatrixCursor(normalizedProjection, nameCount);
 
+            final String powerhubConfig = getPowerhubAppOptionsConfigLocked();
+            final String callingPackage = getCallingPackage();
             for (int i = 0; i < nameCount; i++) {
                 String name = names.get(i);
                 // Determine the owning user as some profile settings are cloned from the parent.
@@ -1739,7 +1760,9 @@ public class SettingsProvider extends ContentProvider {
                     setting = mSettingsRegistry.getSettingLocked(SETTINGS_TYPE_SECURE, owningUserId,
                             deviceId, name);
                 }
-                appendSettingToCursor(result, setting);
+                appendSettingToCursor(result, setting,
+                        PowerhubAppOptionsUtils.getSpoofedSetting(powerhubConfig, callingPackage,
+                                name));
             }
 
             return result;
@@ -1997,6 +2020,8 @@ public class SettingsProvider extends ContentProvider {
             String[] normalizedProjection = normalizeProjection(projection);
             MatrixCursor result = new MatrixCursor(normalizedProjection, nameCount);
 
+            final String powerhubConfig = getPowerhubAppOptionsConfigLocked();
+            final String callingPackage = getCallingPackage();
             for (int i = 0; i < nameCount; i++) {
                 String name = names.get(i);
                 try {
@@ -2011,7 +2036,9 @@ public class SettingsProvider extends ContentProvider {
 
                 Setting setting = mSettingsRegistry.getSettingLocked(
                         SETTINGS_TYPE_SYSTEM, owningUserId, deviceId, name);
-                appendSettingToCursor(result, setting);
+                appendSettingToCursor(result, setting,
+                        PowerhubAppOptionsUtils.getSpoofedSetting(powerhubConfig, callingPackage,
+                                name));
             }
 
             return result;
@@ -2872,6 +2899,38 @@ public class SettingsProvider extends ContentProvider {
         return result;
     }
 
+    private static boolean isPowerhubSpoofableGetMethod(String method) {
+        return Settings.CALL_METHOD_GET_GLOBAL.equals(method)
+                || Settings.CALL_METHOD_GET_SECURE.equals(method)
+                || Settings.CALL_METHOD_GET_SYSTEM.equals(method);
+    }
+
+    private static boolean isPowerhubSpoofableTable(String table) {
+        return TABLE_GLOBAL.equals(table)
+                || TABLE_SECURE.equals(table)
+                || TABLE_SYSTEM.equals(table);
+    }
+
+    private String getPowerhubSpoofedValue(@NonNull String name) {
+        return PowerhubAppOptionsUtils.getSpoofedSetting(
+                getPowerhubAppOptionsConfigLocked(), getCallingPackage(), name);
+    }
+
+    private String getPowerhubAppOptionsConfigLocked() {
+        synchronized (mLock) {
+            Setting setting = mSettingsRegistry.getSettingLocked(
+                    SETTINGS_TYPE_SECURE,
+                    UserHandle.USER_SYSTEM,
+                    Context.DEVICE_ID_DEFAULT,
+                    PowerhubAppOptionsUtils.SETTING_APP_OPTIONS_CONFIG);
+            if (setting == null || setting.isNull()) {
+                return "";
+            }
+            String value = setting.getValue();
+            return value != null ? value : "";
+        }
+    }
+
     private boolean isSettingPreDefined(String name, int type) {
         if (type == SETTINGS_TYPE_GLOBAL) {
             return sAllGlobalSettings.contains(name);
@@ -3066,12 +3125,61 @@ public class SettingsProvider extends ContentProvider {
     }
 
     private static MatrixCursor packageSettingForQuery(Setting setting, String[] projection) {
-        if (setting.isNull()) {
+        if (setting == null || setting.isNull()) {
             return new MatrixCursor(projection, 0);
         }
         MatrixCursor cursor = new MatrixCursor(projection, 1);
         appendSettingToCursor(cursor, setting);
         return cursor;
+    }
+
+    private static MatrixCursor packageSpoofedSettingForQuery(@NonNull String name,
+            String[] projection, @NonNull String value) {
+        MatrixCursor cursor = new MatrixCursor(projection, 1);
+        appendSettingRowToCursor(cursor, 0, name, value, false);
+        return cursor;
+    }
+
+    private static void appendSettingToCursor(MatrixCursor cursor, Setting setting) {
+        appendSettingToCursor(cursor, setting, null);
+    }
+
+    private static void appendSettingToCursor(MatrixCursor cursor, Setting setting,
+            @Nullable String valueOverride) {
+        if (setting == null || setting.isNull()) {
+            return;
+        }
+        appendSettingRowToCursor(cursor, setting.getId(), setting.getName(),
+                valueOverride != null ? valueOverride : setting.getValue(),
+                setting.isValuePreservedInRestore());
+    }
+
+    private static void appendSettingRowToCursor(MatrixCursor cursor, long id, String name,
+            String value, boolean isValuePreservedInRestore) {
+        final int columnCount = cursor.getColumnCount();
+
+        String[] values =  new String[columnCount];
+
+        for (int i = 0; i < columnCount; i++) {
+            String column = cursor.getColumnName(i);
+
+            switch (column) {
+                case Settings.NameValueTable._ID -> {
+                    values[i] = String.valueOf(id);
+                }
+                case Settings.NameValueTable.NAME -> {
+                    values[i] = name;
+                }
+                case Settings.NameValueTable.VALUE -> {
+                    values[i] = value;
+                }
+                case Settings.NameValueTable.IS_PRESERVED_IN_RESTORE -> {
+                    values[i] = String.valueOf(isValuePreservedInRestore);
+                }
+            }
+        }
+
+        cursor.addRow(values);
     }
 
     private static String[] normalizeProjection(String[] projection) {
@@ -3088,36 +3196,6 @@ public class SettingsProvider extends ContentProvider {
         }
 
         return projection;
-    }
-
-    private static void appendSettingToCursor(MatrixCursor cursor, Setting setting) {
-        if (setting == null || setting.isNull()) {
-            return;
-        }
-        final int columnCount = cursor.getColumnCount();
-
-        String[] values =  new String[columnCount];
-
-        for (int i = 0; i < columnCount; i++) {
-            String column = cursor.getColumnName(i);
-
-            switch (column) {
-                case Settings.NameValueTable._ID -> {
-                    values[i] = String.valueOf(setting.getId());
-                }
-                case Settings.NameValueTable.NAME -> {
-                    values[i] = setting.getName();
-                }
-                case Settings.NameValueTable.VALUE -> {
-                    values[i] = setting.getValue();
-                }
-                case Settings.NameValueTable.IS_PRESERVED_IN_RESTORE -> {
-                    values[i] = String.valueOf(setting.isValuePreservedInRestore());
-                }
-            }
-        }
-
-        cursor.addRow(values);
     }
 
     private static boolean isKeyValid(String key) {
