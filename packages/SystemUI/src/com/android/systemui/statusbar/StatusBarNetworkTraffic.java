@@ -149,9 +149,17 @@ public class StatusBarNetworkTraffic extends NetworkTraffic implements DarkRecei
                     && !mSpaceTooSmall;
         if (visible != mVisible) {
             mVisible = visible;
-            setVisibility(mVisible ? View.VISIBLE : View.GONE);
+            // Use INVISIBLE (not GONE) when enabled but temporarily hidden.
+            // INVISIBLE/VISIBLE transitions do NOT trigger requestLayout() in Android,
+            // so the parent StatusIconContainer does not re-measure and give us an
+            // artificially large translationX, which would then make us appear to fit,
+            // show us VISIBLE, and restart the whole GONE→VISIBLE→GONE oscillation.
+            // GONE is reserved for !mEnabled (wrong location) so the slot is freed.
+            setVisibility(mVisible ? View.VISIBLE : (mEnabled ? View.INVISIBLE : View.GONE));
             checkUpdateTrafficDrawable();
-            requestLayout();
+            // Do NOT call requestLayout() here. setVisibility(GONE) fires it internally
+            // when needed. Calling it again doubles the layout passes and is the second
+            // trigger of the oscillation loop.
         }
     }
 

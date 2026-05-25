@@ -422,7 +422,13 @@ public class NetworkTraffic extends TextView implements TunerService.Tunable {
             && !mChipVisible && !mSpaceTooSmall;
         if (visible != mVisible) {
             mVisible = visible;
-            setVisibility(mVisible ? VISIBLE : GONE);
+            // Use INVISIBLE (not GONE) when enabled but temporarily hidden — e.g. when the
+            // parent StatusIconContainer has no room. INVISIBLE/VISIBLE transitions do NOT
+            // trigger requestLayout(), so we avoid the layout-feedback oscillation where
+            // going GONE causes the container to recompute positions, which then makes the
+            // view appear to fit, which sets it VISIBLE again, causing an infinite cycle.
+            // GONE is reserved for when the view is fully disabled (wrong location / detached).
+            setVisibility(mVisible ? VISIBLE : (mEnabled ? INVISIBLE : GONE));
         }
     }
 
