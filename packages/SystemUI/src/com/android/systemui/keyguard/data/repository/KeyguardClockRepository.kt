@@ -72,6 +72,8 @@ interface KeyguardClockRepository {
 
     val currentClock: StateFlow<ClockController?>
 
+    val isClockDateHidden: StateFlow<Boolean>
+
     val clockEventController: ClockEventController
 
     val forcedClockSize: Flow<ClockSize?>
@@ -158,6 +160,26 @@ constructor(
                 scope = applicationScope,
                 started = SharingStarted.WhileSubscribed(),
                 initialValue = null,
+            )
+
+    override val isClockDateHidden: StateFlow<Boolean> =
+        secureSettings
+            .observerFlow(
+                names = arrayOf(Settings.Secure.LOCKSCREEN_HIDE_CLOCK_DATE),
+                userId = UserHandle.USER_ALL,
+            )
+            .onStart { emit(Unit) }
+            .map {
+                secureSettings.getIntForUser(
+                    Settings.Secure.LOCKSCREEN_HIDE_CLOCK_DATE,
+                    0,
+                    UserHandle.USER_CURRENT
+                ) == 1
+            }
+            .stateIn(
+                scope = applicationScope,
+                started = SharingStarted.WhileSubscribed(),
+                initialValue = false,
             )
 
     private fun getClockSize(): ClockSizeSetting {

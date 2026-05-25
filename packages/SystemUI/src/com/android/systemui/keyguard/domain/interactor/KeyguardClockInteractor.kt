@@ -88,6 +88,8 @@ constructor(
 
     val currentClock: StateFlow<ClockController?> = keyguardClockRepository.currentClock
 
+    val isClockDateHidden: StateFlow<Boolean> = keyguardClockRepository.isClockDateHidden
+
     val clockEventController: ClockEventController = keyguardClockRepository.clockEventController
 
     var clock: ClockController? by keyguardClockRepository.clockEventController::clock

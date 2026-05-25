@@ -25,6 +25,7 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.constraintlayout.widget.ConstraintSet.BOTTOM
 import androidx.constraintlayout.widget.ConstraintSet.END
 import androidx.constraintlayout.widget.ConstraintSet.GONE
+import androidx.constraintlayout.widget.ConstraintSet.INVISIBLE
 import androidx.constraintlayout.widget.ConstraintSet.PARENT_ID
 import androidx.constraintlayout.widget.ConstraintSet.START
 import androidx.constraintlayout.widget.ConstraintSet.TOP
@@ -116,9 +117,10 @@ constructor(
 
         // Add constraint between elements in clock and clock container
         return constraintSet.apply {
-            setVisibility(getTargetClockFace(clock).views, VISIBLE)
+            val hideClock = keyguardClockViewModel.isClockDateHidden.value
+            setVisibility(getTargetClockFace(clock).views, if (hideClock) INVISIBLE else VISIBLE)
             setVisibility(getNonTargetClockFace(clock).views, GONE)
-            setAlpha(getTargetClockFace(clock).views, 1F)
+            setAlpha(getTargetClockFace(clock).views, if (hideClock) 0F else 1F)
             setAlpha(getNonTargetClockFace(clock).views, 0F)
 
             if (!keyguardClockViewModel.isLargeClockVisible.value) {

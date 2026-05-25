@@ -13527,6 +13527,12 @@ public final class Settings {
                 "lockscreen_use_double_line_clock";
 
         /**
+         * Whether to completely hide the clock and date on the lockscreen.
+         * @hide
+         */
+        public static final String LOCKSCREEN_HIDE_CLOCK_DATE = "lockscreen_hide_clock_date";
+
+        /**
          * Whether to show the vibrate icon in the Status Bar (default off)
          *
          * @hide

@@ -24,6 +24,7 @@ import android.view.LayoutInflater
 import androidx.constraintlayout.widget.Barrier
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
+import androidx.constraintlayout.widget.ConstraintSet.INVISIBLE
 import com.android.keyguard.KeyguardSliceView
 import com.android.keyguard.KeyguardSliceViewController
 import com.android.systemui.customization.clocks.R as clocksR
@@ -198,6 +199,12 @@ constructor(
                         ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL, ConstraintSet.BOTTOM,
                     )
                 }
+            }
+
+            val hideClockDate = keyguardClockViewModel.isClockDateHidden.value
+            if (hideClockDate) {
+                setVisibility(R.id.keyguard_slice_view, INVISIBLE)
+                setAlpha(R.id.keyguard_slice_view, 0f)
             }
 
             val barrierIds = mutableListOf(R.id.keyguard_slice_view)

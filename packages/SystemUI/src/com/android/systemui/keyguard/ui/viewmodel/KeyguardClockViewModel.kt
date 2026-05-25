@@ -81,6 +81,8 @@ constructor(
                 initialValue = true,
             )
 
+    val isClockDateHidden: StateFlow<Boolean> = keyguardClockInteractor.isClockDateHidden
+
     val clockEventController: ClockEventController = keyguardClockInteractor.clockEventController
     val currentClock = keyguardClockInteractor.currentClock
 
