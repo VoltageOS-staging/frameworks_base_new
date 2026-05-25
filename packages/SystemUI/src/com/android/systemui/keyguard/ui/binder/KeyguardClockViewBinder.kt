@@ -111,6 +111,12 @@ object KeyguardClockViewBinder {
                     }
 
                     launch {
+                        viewModel.isClockDateHidden.collect {
+                            blueprintInteractor.refreshBlueprint(Type.DefaultTransition)
+                        }
+                    }
+
+                    launch {
                         viewModel.clockShouldBeCentered.collect {
                             viewModel.currentClock.value?.let {
                                 if (it.largeClock.config.hasCustomPositionUpdatedAnimation) {
