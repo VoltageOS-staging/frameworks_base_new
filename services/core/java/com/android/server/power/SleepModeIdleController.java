@@ -22,12 +22,12 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.provider.Telephony;
 import android.telecom.TelecomManager;
 import android.util.ArrayMap;
 import android.util.ArraySet;
+import com.android.internal.os.BackgroundThread;
 
 import java.util.List;
 import java.util.Map;
@@ -38,12 +38,13 @@ final class SleepModeIdleController {
     private static final String TAG = "SleepModeIdleController";
     
     private static final long REAPPLY_INTERVAL_MS = 20 * 60 * 1000; // 20 min
+    private static final long DEBOUNCE_DELAY_MS = 2000;
 
     private final Context mContext;
-    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private final Handler mHandler = BackgroundThread.getHandler();
     private final Map<String, Integer> mBucketSnapshot = new ArrayMap<>();
 
-    private boolean mDeepSleepActive = false;
+    private volatile boolean mDeepSleepActive = false;
 
     SleepModeIdleController(Context context) {
         mContext = context;
@@ -54,15 +55,23 @@ final class SleepModeIdleController {
 
         mDeepSleepActive = enabled;
 
-        if (enabled) {
-            snapshotBuckets();
-            applyRestrictions();
-            scheduleReapply();
-        } else {
-            restoreBuckets();
-            mHandler.removeCallbacks(mReapplyRunnable);
-        }
+        mHandler.removeCallbacks(mUpdateRestrictionsRunnable);
+        mHandler.postDelayed(mUpdateRestrictionsRunnable, DEBOUNCE_DELAY_MS);
     }
+
+    private final Runnable mUpdateRestrictionsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mDeepSleepActive) {
+                snapshotBuckets();
+                applyRestrictions();
+                scheduleReapply();
+            } else {
+                restoreBuckets();
+                mHandler.removeCallbacks(mReapplyRunnable);
+            }
+        }
+    };
 
     private void applyRestrictions() {
         final UsageStatsManager usm = mContext.getSystemService(UsageStatsManager.class);
