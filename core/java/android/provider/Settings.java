@@ -7118,6 +7118,17 @@ public final class Settings {
          * @hide
          */
         public static final String NETWORK_TRAFFIC_LOCATION = "network_traffic_location";
+
+        /**
+         * Network traffic statusbar sub-location.
+         * Only used when NETWORK_TRAFFIC_LOCATION == 1 (statusbar).
+         * 0 = Show in both the collapsed statusbar and the QQS/expanded QS header (default)
+         * 1 = Statusbar only (hide in QQS/expanded QS)
+         * 2 = QQS/expanded QS only (hide in the collapsed statusbar)
+         * @hide
+         */
+         public static final String NETWORK_TRAFFIC_STATUSBAR_LOCATION = "network_traffic_statusbar_location";
+
         /**
          * Network traffic indicator mode
          * 0 = Display both up- and down-stream traffic
