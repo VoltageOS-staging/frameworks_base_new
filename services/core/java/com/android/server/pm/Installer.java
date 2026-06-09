@@ -723,6 +723,101 @@ public class Installer extends SystemService {
         }
     }
 
+    public void tarAppData(String packageName, int userId, int storageFlags,
+            ParcelFileDescriptor outFd, boolean excludeCache) throws InstallerException {
+        if (!checkBeforeRemote()) return;
+
+        try {
+            mInstalld.tarAppData(null, packageName, userId, storageFlags, outFd, excludeCache);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
+    public void untarAppDataExternal(String packageName, int userId,
+            ParcelFileDescriptor inFd) throws InstallerException {
+        if (!checkBeforeRemote()) return;
+
+        try {
+            mInstalld.untarAppDataExternal(null, packageName, userId, inFd);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
+    public void untarAppData(String packageName, int userId, int storageFlags,
+            int appId, String seInfo, ParcelFileDescriptor inFd) throws InstallerException {
+        if (!checkBeforeRemote()) return;
+
+        try {
+            mInstalld.untarAppData(null, packageName, userId, storageFlags, appId, seInfo, inFd);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
+    /**
+     * Reads the fully assembled .vbak archive from {@code inFd} and writes it to
+     * /data/media/{@code userId}/AppDataBackup/{@code archiveId}.vbak.
+     * system_server opens the staged file (in /data/system/app_backup_staging,
+     * system_data_file) and passes the read-only fd here; installd performs the
+     * actual write to /data/media, so system_server needs no media_rw_data_file
+     * write permission.
+     */
+    public void publishBackupArchive(int userId, String archiveId,
+            ParcelFileDescriptor inFd) throws InstallerException {
+        if (!checkBeforeRemote()) return;
+        try {
+            mInstalld.publishBackupArchive(userId, archiveId, inFd);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
+    /**
+     * Returns a read-only fd for
+     * /data/media/{@code userId}/AppDataBackup/{@code archiveId}.vbak, opened by
+     * installd. system_server reads (and decrypts) the backup through this fd
+     * and never opens a /data/media path itself, so it needs no
+     * media_rw_data_file read permission.
+     */
+    public ParcelFileDescriptor openBackupArchive(int userId, String archiveId)
+            throws InstallerException {
+        if (!checkBeforeRemote()) return null;
+        try {
+            return mInstalld.openBackupArchive(userId, archiveId);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
+    /**
+     * Returns the archive ids (file names without the .vbak extension) under
+     * /data/media/{@code userId}/AppDataBackup, enumerated by installd so
+     * system_server never lists the directory on /data/media itself.
+     */
+    public String[] listBackupArchives(int userId) throws InstallerException {
+        if (!checkBeforeRemote()) return new String[0];
+        try {
+            return mInstalld.listBackupArchives(userId);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
+    /**
+     * Deletes /data/media/{@code userId}/AppDataBackup/{@code archiveId}.vbak.
+     * installd owns the unlink; system_server needs no media_rw_data_file unlink.
+     */
+    public void deleteBackupArchive(int userId, String archiveId) throws InstallerException {
+        if (!checkBeforeRemote()) return;
+        try {
+            mInstalld.deleteBackupArchive(userId, archiveId);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
     /**
      * Deletes user data snapshot of the given package.
      *
