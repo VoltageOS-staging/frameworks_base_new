@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<permissions>
+    <privapp-permissions package="com.android.appdatabackup">
+        <permission name="android.permission.APP_DATA_BACKUP" />
+        <permission name="android.permission.APP_DATA_RESTORE" />
+        <permission name="android.permission.INSTALL_PACKAGES" />
+        <permission name="android.permission.FORCE_STOP_PACKAGES" />
+        <permission name="android.permission.QUERY_ALL_PACKAGES" />
+    </privapp-permissions>
+</permissions>
