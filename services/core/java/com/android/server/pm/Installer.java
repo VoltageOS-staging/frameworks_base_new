@@ -724,6 +724,34 @@ public class Installer extends SystemService {
     }
 
     /**
+     * Archives the app data directory (CE or DE) of the given package into a tar
+     * stream written to {@code outFd}.
+     *
+     * <p>Runs inside installd, which (unlike system_server) is allowed to read
+     * app_data_file, so the produced archive contains the real user data rather
+     * than just the APK.
+     *
+     * @param packageName name of the package to archive.
+     * @param userId id of the user whose data to archive.
+     * @param storageFlags exactly one of {@link #FLAG_STORAGE_CE} or
+     *  {@link #FLAG_STORAGE_DE}.
+     * @param outFd writable fd that receives the ustar stream.
+     * @param excludeCache when {@code true}, top-level cache/ and code_cache/ are skipped.
+     *
+     * @throws InstallerException if archiving failed.
+     */
+    public void tarAppData(String packageName, int userId, int storageFlags,
+            ParcelFileDescriptor outFd, boolean excludeCache) throws InstallerException {
+        if (!checkBeforeRemote()) return;
+
+        try {
+            mInstalld.tarAppData(null, packageName, userId, storageFlags, outFd, excludeCache);
+        } catch (Exception e) {
+            throw InstallerException.from(e);
+        }
+    }
+
+    /**
      * Deletes user data snapshot of the given package.
      *
      * @param pkg name of the package to delete user data snapshot for.

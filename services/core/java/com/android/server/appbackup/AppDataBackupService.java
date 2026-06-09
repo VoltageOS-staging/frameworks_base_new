@@ -1,0 +1,525 @@
+/*
+ * Copyright (C) 2026 Voltage OS
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.android.server.appbackup;
+
+import android.annotation.NonNull;
+import android.app.appbackup.AppBackupInfo;
+import android.app.appbackup.BackupRecord;
+import android.app.appbackup.BackupResult;
+import android.app.appbackup.IAppDataBackupService;
+import android.app.appbackup.IBackupProgressCallback;
+import android.app.appbackup.IRestoreProgressCallback;
+import android.app.usage.StorageStats;
+import android.app.usage.StorageStatsManager;
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.os.Binder;
+import android.os.RemoteException;
+import android.os.ResultReceiver;
+import android.os.ShellCallback;
+import android.os.UserHandle;
+import android.os.storage.StorageManager;
+import android.util.Log;
+import android.util.Slog;
+
+import com.android.server.SystemService;
+import com.android.server.pm.Installer;
+import com.android.server.pm.Installer.InstallerException;
+
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * System service that provides app data backup and restore functionality.
+ *
+ * <p>Registered as {@code "app_data_backup"} in ServiceManager.
+ * Exposed to privileged clients via {@link android.app.appbackup.AppDataBackupRestoreManager}.
+ *
+ * <p>All long-running operations (backup, restore) are executed on a dedicated
+ * thread pool so the Binder thread is never blocked.
+ *
+ * @hide
+ */
+public class AppDataBackupService extends SystemService {
+
+    private static final String TAG = "AppDataBackupService";
+
+    public static final String SERVICE_NAME = "app_data_backup";
+
+    private static final int THREAD_POOL_SIZE = 2;
+    private static final String RAW_MEDIA_ROOT = "/data/media";
+
+    private final BinderService mBinderService = new BinderService();
+    private final ExecutorService mExecutor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    private final Installer mInstaller;
+
+    private final Map<String, Object> mActiveEngines = new ConcurrentHashMap<>();
+
+    public AppDataBackupService(@NonNull Context context) {
+        super(context);
+        mInstaller = new Installer(context);
+    }
+
+    @Override
+    public void onStart() {
+        mInstaller.onStart();
+        publishBinderService(SERVICE_NAME, mBinderService);
+        Slog.i(TAG, "AppDataBackupService started");
+    }
+
+    final class BinderService extends IAppDataBackupService.Stub {
+
+        @Override
+        public void onShellCommand(FileDescriptor in, FileDescriptor out,
+                FileDescriptor err, String[] args, ShellCallback callback,
+                ResultReceiver resultReceiver) {
+            enforceShellOrRoot();
+            new AppDataBackupShellCommand(this).exec(
+                    this,
+                    in,
+                    out,
+                    err,
+                    args,
+                    callback,
+                    resultReceiver);
+        }
+
+        private void enforceShellOrRoot() {
+            final int uid = Binder.getCallingUid();
+            if (uid != android.os.Process.SHELL_UID && uid != android.os.Process.ROOT_UID) {
+                throw new SecurityException("Shell commands only available to shell/root");
+            }
+        }
+
+        @Override
+        public List<AppBackupInfo> getInstalledApps(int userId) {
+            enforceBackupPermission();
+            final long ident = Binder.clearCallingIdentity();
+            try {
+                return buildInstalledAppList(userId);
+            } finally {
+                Binder.restoreCallingIdentity(ident);
+            }
+        }
+
+        @Override
+        public List<BackupRecord> getAvailableBackups(String backupDir, int userId) {
+            enforceBackupPermission();
+            final long ident = Binder.clearCallingIdentity();
+            try {
+                return scanBackupDirectory(resolveBackupDirectory(backupDir, userId), userId);
+            } finally {
+                Binder.restoreCallingIdentity(ident);
+            }
+        }
+
+        @Override
+        public String backupPackages(List<String> packageNames, String backupDir,
+                boolean excludeCache, int userId, IBackupProgressCallback callback) {
+            enforceBackupPermission();
+
+            final String token = UUID.randomUUID().toString();
+            final File destDir = resolveBackupDirectory(backupDir, userId);
+
+            mExecutor.submit(() -> {
+                final BackupEngine engine = new BackupEngine(
+                        getContext(), getContext().getPackageManager(), mInstaller);
+                mActiveEngines.put(token, engine);
+                runBackup(engine, packageNames, destDir, excludeCache, userId, token, callback);
+                mActiveEngines.remove(token);
+            });
+
+            return token;
+        }
+
+        @Override
+        public String restorePackages(List<String> backupIds, String backupDir,
+                int userId, IRestoreProgressCallback callback) {
+            enforceRestorePermission();
+
+            final String token = UUID.randomUUID().toString();
+            final File srcDir = resolveBackupDirectory(backupDir, userId);
+
+            mExecutor.submit(() -> {
+                final RestoreEngine engine = new RestoreEngine(getContext(), mInstaller);
+                mActiveEngines.put(token, engine);
+                runRestore(engine, backupIds, srcDir, userId, token, callback);
+                mActiveEngines.remove(token);
+            });
+
+            return token;
+        }
+
+        @Override
+        public void cancelOperation(String operationToken) {
+            enforceAnyBackupPermission();
+            final Object engine = mActiveEngines.get(operationToken);
+            if (engine instanceof BackupEngine) {
+                ((BackupEngine) engine).cancel();
+            } else if (engine instanceof RestoreEngine) {
+                ((RestoreEngine) engine).cancel();
+            }
+        }
+
+        @Override
+        public boolean deleteBackup(String backupId, String backupDir) {
+            enforceBackupPermission();
+            final long ident = Binder.clearCallingIdentity();
+            try {
+                final File dir = new File(resolveBackupDirectory(backupDir,
+                        android.os.UserHandle.getCallingUserId()), backupId);
+                if (!dir.isDirectory()) return false;
+                deleteRecursive(dir);
+                return !dir.exists();
+            } finally {
+                Binder.restoreCallingIdentity(ident);
+            }
+        }
+
+        @Override
+        public BackupRecord getBackupRecord(String backupId, String backupDir) {
+            enforceBackupPermission();
+            final long ident = Binder.clearCallingIdentity();
+            try {
+            final File normalizedDir = resolveBackupDirectory(backupDir,
+                android.os.UserHandle.getCallingUserId());
+            final File manifestFile = new File(new File(normalizedDir, backupId),
+                        "manifest.json");
+                if (!manifestFile.exists()) return null;
+            return BackupManifest.readFrom(manifestFile, normalizedDir.getAbsolutePath());
+            } catch (IOException e) {
+                Slog.w(TAG, "getBackupRecord failed", e);
+                return null;
+            } finally {
+                Binder.restoreCallingIdentity(ident);
+            }
+        }
+
+        @Override
+        public boolean isEncryptionAvailable(int userId) {
+            return false;
+        }
+    }
+
+    private void runBackup(@NonNull BackupEngine engine,
+            @NonNull List<String> packageNames,
+            @NonNull File destDir,
+            boolean excludeCache,
+            int userId,
+            @NonNull String token,
+            IBackupProgressCallback callback) {
+
+        destDir.mkdirs();
+        final int total = packageNames.size();
+        Slog.i(TAG, "Starting backup of " + total + " package(s) into " + destDir);
+        notifyBackupStarted(callback, token, total);
+
+        int successCount = 0;
+        final PackageManager pm = getContext().getPackageManager();
+
+        for (int i = 0; i < total; i++) {
+            final String pkg = packageNames.get(i);
+            notifyPackageBackupStarted(callback, token, pkg, i + 1, total);
+
+            BackupResult result;
+            try {
+                final PackageInfo pi = pm.getPackageInfoAsUser(pkg,
+                        PackageManager.GET_SHARED_LIBRARY_FILES
+                        | PackageManager.MATCH_UNINSTALLED_PACKAGES,
+                    userId);
+                final BackupRecord record = engine.backupPackage(pi, destDir, excludeCache, userId);
+                if (record == null) {
+                    result = BackupResult.cancelled();
+                } else {
+                    result = BackupResult.ok();
+                    successCount++;
+                }
+            } catch (PackageManager.NameNotFoundException e) {
+                result = BackupResult.failure(BackupResult.ERROR_PACKAGE_NOT_FOUND,
+                        "Package not found: " + pkg);
+            } catch (IOException e) {
+                result = BackupResult.failure(BackupResult.ERROR_IO, e.getMessage());
+            }
+
+            notifyPackageBackupFinished(callback, token, pkg, result);
+
+            if (result.getErrorCode() == BackupResult.ERROR_CANCELLED) break;
+        }
+
+        final BackupResult aggregate;
+        if (successCount == total) {
+            aggregate = BackupResult.ok();
+        } else if (successCount > 0) {
+            aggregate = BackupResult.partial(successCount + "/" + total + " packages succeeded");
+        } else {
+            aggregate = BackupResult.failure(BackupResult.ERROR_IO, "All packages failed");
+        }
+
+        Slog.i(TAG, "Backup finished for token=" + token + " result=" + aggregate);
+        notifyBackupFinished(callback, token, aggregate);
+    }
+
+    private void runRestore(@NonNull RestoreEngine engine,
+            @NonNull List<String> backupIds,
+            @NonNull File backupDir,
+            int userId,
+            @NonNull String token,
+            IRestoreProgressCallback callback) {
+
+        final int total = backupIds.size();
+    Slog.i(TAG, "Starting restore of " + total + " backup(s) from " + backupDir);
+        notifyRestoreStarted(callback, token, total);
+
+        int successCount = 0;
+
+        for (int i = 0; i < total; i++) {
+            final String backupId = backupIds.get(i);
+
+            BackupRecord record;
+            try {
+                record = BackupManifest.readFrom(
+                        new File(new File(backupDir, backupId), "manifest.json"),
+                        backupDir.getAbsolutePath());
+            } catch (IOException e) {
+                final BackupResult r = BackupResult.failure(BackupResult.ERROR_IO,
+                        "Cannot read manifest for " + backupId + ": " + e);
+                notifyPackageRestoreFinished(callback, token, backupId, r);
+                continue;
+            }
+
+            notifyPackageRestoreStarted(callback, token, record.getPackageName(), i + 1, total);
+            notifyPackageDataRestoring(callback, token, record.getPackageName());
+
+            final BackupResult result = engine.restorePackage(record, userId);
+            notifyPackageRestoreFinished(callback, token, record.getPackageName(), result);
+
+            if (result.isSuccess() || result.getStatus() == BackupResult.STATUS_PARTIAL) {
+                successCount++;
+            }
+            if (result.getErrorCode() == BackupResult.ERROR_CANCELLED) break;
+        }
+
+        final BackupResult aggregate;
+        if (successCount == total) {
+            aggregate = BackupResult.ok();
+        } else if (successCount > 0) {
+            aggregate = BackupResult.partial(successCount + "/" + total + " packages restored");
+        } else {
+            aggregate = BackupResult.failure(BackupResult.ERROR_IO, "All restores failed");
+        }
+
+        Slog.i(TAG, "Restore finished for token=" + token + " result=" + aggregate);
+        notifyRestoreFinished(callback, token, aggregate);
+    }
+
+    private List<AppBackupInfo> buildInstalledAppList(int userId) {
+        final PackageManager pm = getContext().getPackageManager();
+        final List<PackageInfo> packages = pm.getInstalledPackagesAsUser(
+                PackageManager.GET_SHARED_LIBRARY_FILES, userId);
+
+        final List<AppBackupInfo> result = new ArrayList<>();
+        for (PackageInfo pi : packages) {
+            final ApplicationInfo ai = pi.applicationInfo;
+            if (ai == null) continue;
+            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
+            if (ai.sourceDir == null) continue;
+
+            final long dataSize = estimateDataSize(pi.packageName, userId);
+            final boolean hasDe = new File("/data/user_de/" + userId
+                    + "/" + pi.packageName).exists();
+            final String label;
+            try {
+                label = pm.getApplicationLabel(ai).toString();
+            } catch (Exception e) {
+                continue;
+            }
+
+            result.add(new AppBackupInfo(
+                    pi.packageName,
+                    label,
+                    pi.versionName,
+                    pi.getLongVersionCode(),
+                    ai.sourceDir,
+                    ai.splitSourceDirs,
+                    dataSize,
+                    hasDe,
+                    ai.uid,
+                    userId));
+        }
+        return result;
+    }
+
+    /**
+     * Returns the on-disk size of the app's private data directories (CE + DE,
+     * excluding the APK code size).
+     *
+     * <p>This must go through {@link StorageStatsManager}, which queries the
+     * sizes via installd. We cannot walk {@code /data/data/<pkg>} directly:
+     * those directories are owned by the app's UID (mode 0700) and labeled
+     * {@code app_data_file}, which system_server is not permitted to read, so
+     * {@link File#listFiles()} returns {@code null} and every size came back as
+     * 0. Returns -1 when the size cannot be determined (rendered as "?" in the
+     * UI).
+     */
+    private long estimateDataSize(String packageName, int userId) {
+        final StorageStatsManager ssm =
+                getContext().getSystemService(StorageStatsManager.class);
+        if (ssm == null) return -1;
+        try {
+            final StorageStats stats = ssm.queryStatsForPackage(
+                    StorageManager.UUID_DEFAULT, packageName, UserHandle.of(userId));
+            // getDataBytes() = CE + DE data (cache is reported separately and is
+            // dropped by the installd snapshot anyway), which is what actually
+            // gets archived.
+            return stats.getDataBytes();
+        } catch (PackageManager.NameNotFoundException | IOException e) {
+            Slog.w(TAG, "queryStatsForPackage failed for " + packageName, e);
+            return -1;
+        }
+    }
+
+    private List<BackupRecord> scanBackupDirectory(File backupDir, int userId) {
+        if (!backupDir.isDirectory()) return Collections.emptyList();
+
+        final List<BackupRecord> records = new ArrayList<>();
+        final File[] entries = backupDir.listFiles();
+        if (entries == null) return records;
+
+        for (File entry : entries) {
+            if (!entry.isDirectory()) continue;
+            final File manifest = new File(entry, "manifest.json");
+            if (!manifest.exists()) continue;
+            try {
+                final BackupRecord record = BackupManifest.readFrom(manifest,
+                        backupDir.getAbsolutePath());
+                if (userId < 0 || record.getUserId() == userId) {
+                    records.add(record);
+                }
+            } catch (IOException e) {
+                Slog.w(TAG, "Skipping malformed backup: " + entry.getName(), e);
+            }
+        }
+        return records;
+    }
+
+    private static void notifyBackupStarted(IBackupProgressCallback cb, String token, int total) {
+        if (cb == null) return;
+        try { cb.onBackupStarted(token, total); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyPackageBackupStarted(IBackupProgressCallback cb, String token,
+            String pkg, int idx, int total) {
+        if (cb == null) return;
+        try { cb.onPackageBackupStarted(token, pkg, idx, total); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyPackageBackupFinished(IBackupProgressCallback cb, String token,
+            String pkg, BackupResult result) {
+        if (cb == null) return;
+        try { cb.onPackageBackupFinished(token, pkg, result); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyBackupFinished(IBackupProgressCallback cb, String token,
+            BackupResult result) {
+        if (cb == null) return;
+        try { cb.onBackupFinished(token, result); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyRestoreStarted(IRestoreProgressCallback cb, String token, int total) {
+        if (cb == null) return;
+        try { cb.onRestoreStarted(token, total); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyPackageRestoreStarted(IRestoreProgressCallback cb, String token,
+            String pkg, int idx, int total) {
+        if (cb == null) return;
+        try { cb.onPackageRestoreStarted(token, pkg, idx, total); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyPackageDataRestoring(IRestoreProgressCallback cb, String token,
+            String pkg) {
+        if (cb == null) return;
+        try { cb.onPackageDataRestoring(token, pkg); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyPackageRestoreFinished(IRestoreProgressCallback cb, String token,
+            String pkg, BackupResult result) {
+        if (cb == null) return;
+        try { cb.onPackageRestoreFinished(token, pkg, result); } catch (RemoteException ignored) {}
+    }
+
+    private static void notifyRestoreFinished(IRestoreProgressCallback cb, String token,
+            BackupResult result) {
+        if (cb == null) return;
+        try { cb.onRestoreFinished(token, result); } catch (RemoteException ignored) {}
+    }
+
+    private void enforceBackupPermission() {
+        getContext().enforceCallingOrSelfPermission(
+                android.Manifest.permission.APP_DATA_BACKUP,
+                "Requires APP_DATA_BACKUP permission");
+    }
+
+    private void enforceRestorePermission() {
+        getContext().enforceCallingOrSelfPermission(
+                android.Manifest.permission.APP_DATA_RESTORE,
+                "Requires APP_DATA_RESTORE permission");
+    }
+
+    private void enforceAnyBackupPermission() {
+        try {
+            enforceBackupPermission();
+        } catch (SecurityException e) {
+            enforceRestorePermission();
+        }
+    }
+
+    private static void deleteRecursive(File f) {
+        if (f.isDirectory()) {
+            final File[] children = f.listFiles();
+            if (children != null) for (File c : children) deleteRecursive(c);
+        }
+        f.delete();
+    }
+
+    private static File resolveBackupDirectory(@NonNull String backupDir, int userId) {
+        if (backupDir.startsWith("/sdcard/")) {
+            return new File(RAW_MEDIA_ROOT + "/" + userId + backupDir.substring("/sdcard".length()));
+        }
+        if (backupDir.equals("/sdcard")) {
+            return new File(RAW_MEDIA_ROOT + "/" + userId);
+        }
+        final String emulatedPrefix = "/storage/emulated/" + userId;
+        if (backupDir.startsWith(emulatedPrefix)) {
+            return new File(RAW_MEDIA_ROOT + "/" + userId
+                    + backupDir.substring(emulatedPrefix.length()));
+        }
+        return new File(backupDir);
+    }
+}
