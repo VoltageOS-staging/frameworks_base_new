@@ -26,6 +26,7 @@
 
             <!-- Expressive parallax header. -->
             <LinearLayout
+                android:id="@+id/header_hero"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -51,13 +52,15 @@
 
                 <!-- Live selection summary, the visual centerpiece. -->
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/summary_card"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     app:cardBackgroundColor="?attr/colorPrimaryContainer"
-                    app:shapeAppearance="?attr/shapeAppearanceCornerExtraLarge">
+                    app:shapeAppearance="@style/ShapeAppearance.AppDataBackup.SummaryExpressive">
 
                     <LinearLayout
+                        android:id="@+id/summary_gradient"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
