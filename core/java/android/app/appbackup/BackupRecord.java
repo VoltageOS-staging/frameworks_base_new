@@ -38,6 +38,7 @@ public final class BackupRecord implements Parcelable {
     private final long mApkSize;
     private final long mCeDataSize;
     private final long mDeDataSize;
+    private final int mComponents;
     private final boolean mEncrypted;
     private final int mState;
     private final String mBackupDir;
@@ -46,7 +47,7 @@ public final class BackupRecord implements Parcelable {
     public BackupRecord(String id, String packageName, String label,
             String versionName, long versionCode, long timestampMs,
             long apkSize, long ceDataSize, long deDataSize,
-            boolean encrypted, int state, String backupDir, int userId) {
+            int components, boolean encrypted, int state, String backupDir, int userId) {
         mId = id;
         mPackageName = packageName;
         mLabel = label;
@@ -56,6 +57,7 @@ public final class BackupRecord implements Parcelable {
         mApkSize = apkSize;
         mCeDataSize = ceDataSize;
         mDeDataSize = deDataSize;
+        mComponents = components;
         mEncrypted = encrypted;
         mState = state;
         mBackupDir = backupDir;
@@ -72,6 +74,7 @@ public final class BackupRecord implements Parcelable {
         mApkSize = in.readLong();
         mCeDataSize = in.readLong();
         mDeDataSize = in.readLong();
+        mComponents = in.readInt();
         mEncrypted = in.readBoolean();
         mState = in.readInt();
         mBackupDir = in.readString();
@@ -88,6 +91,8 @@ public final class BackupRecord implements Parcelable {
     public long getCeDataSize() { return mCeDataSize; }
     public long getDeDataSize() { return mDeDataSize; }
     public long getTotalSize() { return mApkSize + mCeDataSize + mDeDataSize; }
+    /** Bitmask of AppDataBackupRestoreManager.COMPONENT_* included in this snapshot. */
+    public int getComponents() { return mComponents; }
     public boolean isEncrypted() { return mEncrypted; }
     public int getState() { return mState; }
     public String getBackupDir() { return mBackupDir; }
@@ -104,6 +109,7 @@ public final class BackupRecord implements Parcelable {
         dest.writeLong(mApkSize);
         dest.writeLong(mCeDataSize);
         dest.writeLong(mDeDataSize);
+        dest.writeInt(mComponents);
         dest.writeBoolean(mEncrypted);
         dest.writeInt(mState);
         dest.writeString(mBackupDir);

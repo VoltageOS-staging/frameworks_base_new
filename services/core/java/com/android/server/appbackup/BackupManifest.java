@@ -17,6 +17,7 @@
 package com.android.server.appbackup;
 
 import android.annotation.NonNull;
+import android.app.appbackup.AppDataBackupRestoreManager;
 import android.app.appbackup.BackupRecord;
 import android.util.Slog;
 
@@ -45,6 +46,7 @@ class BackupManifest {
     private static final String KEY_CE_SIZE      = "ceDataSize";
     private static final String KEY_DE_SIZE      = "deDataSize";
     private static final String KEY_EXT_SIZE     = "extDataSize";
+    private static final String KEY_COMPONENTS   = "components";
     private static final String KEY_ENCRYPTED    = "encrypted";
     private static final String KEY_STATE        = "state";
     private static final String KEY_CHECKSUM     = "checksum";
@@ -60,6 +62,7 @@ class BackupManifest {
     private final long mCeDataSize;
     private final long mDeDataSize;
     private final long mExtDataSize;
+    private final int mComponents;
     private final boolean mEncrypted;
     private final int mState;
     private final String mChecksum;
@@ -67,8 +70,8 @@ class BackupManifest {
 
     BackupManifest(String id, String packageName, String label, String versionName,
             long versionCode, long timestampMs, long apkSize, long ceDataSize,
-            long deDataSize, long extDataSize, boolean encrypted, int state, String checksum,
-            int userId) {
+            long deDataSize, long extDataSize, int components, boolean encrypted, int state,
+            String checksum, int userId) {
         mId = id;
         mPackageName = packageName;
         mLabel = label;
@@ -79,6 +82,7 @@ class BackupManifest {
         mCeDataSize = ceDataSize;
         mDeDataSize = deDataSize;
         mExtDataSize = extDataSize;
+        mComponents = components;
         mEncrypted = encrypted;
         mState = state;
         mChecksum = checksum;
@@ -98,6 +102,7 @@ class BackupManifest {
             json.put(KEY_CE_SIZE, mCeDataSize);
             json.put(KEY_DE_SIZE, mDeDataSize);
             json.put(KEY_EXT_SIZE, mExtDataSize);
+            json.put(KEY_COMPONENTS, mComponents);
             json.put(KEY_ENCRYPTED, mEncrypted);
             json.put(KEY_STATE, mState);
             json.put(KEY_CHECKSUM, mChecksum);
@@ -130,6 +135,7 @@ class BackupManifest {
                     json.optLong(KEY_APK_SIZE, 0),
                     json.optLong(KEY_CE_SIZE, 0),
                     json.optLong(KEY_DE_SIZE, 0),
+                    resolveComponents(json),
                     json.optBoolean(KEY_ENCRYPTED, false),
                     json.optInt(KEY_STATE, BackupRecord.STATE_OK),
                     backupDir,
@@ -153,6 +159,7 @@ class BackupManifest {
             json.put(KEY_CE_SIZE, mCeDataSize);
             json.put(KEY_DE_SIZE, mDeDataSize);
             json.put(KEY_EXT_SIZE, mExtDataSize);
+            json.put(KEY_COMPONENTS, mComponents);
             json.put(KEY_ENCRYPTED, mEncrypted);
             json.put(KEY_STATE, mState);
             json.put(KEY_CHECKSUM, mChecksum);
@@ -177,6 +184,7 @@ class BackupManifest {
                     json.optLong(KEY_APK_SIZE, 0),
                     json.optLong(KEY_CE_SIZE, 0),
                     json.optLong(KEY_DE_SIZE, 0),
+                    resolveComponents(json),
                     json.optBoolean(KEY_ENCRYPTED, false),
                     json.optInt(KEY_STATE, BackupRecord.STATE_OK),
                     backupDir,
@@ -189,8 +197,25 @@ class BackupManifest {
     @NonNull
     BackupRecord toBackupRecord(@NonNull String backupDir) {
         return new BackupRecord(mId, mPackageName, mLabel, mVersionName, mVersionCode,
-                mTimestampMs, mApkSize, mCeDataSize, mDeDataSize, mEncrypted, mState,
+                mTimestampMs, mApkSize, mCeDataSize, mDeDataSize, mComponents, mEncrypted, mState,
                 backupDir, mUserId);
+    }
+
+    /**
+     * Returns the persisted component bitmask, falling back to inferring it from
+     * the per-part sizes for manifests written before the components key existed.
+     */
+    private static int resolveComponents(@NonNull JSONObject json) {
+        final int stored = json.optInt(KEY_COMPONENTS, -1);
+        if (stored >= 0) {
+            return stored;
+        }
+        int inferred = 0;
+        if (json.optLong(KEY_APK_SIZE, 0) > 0) inferred |= AppDataBackupRestoreManager.COMPONENT_APK;
+        if (json.optLong(KEY_CE_SIZE, 0) > 0) inferred |= AppDataBackupRestoreManager.COMPONENT_CE_DATA;
+        if (json.optLong(KEY_DE_SIZE, 0) > 0) inferred |= AppDataBackupRestoreManager.COMPONENT_DE_DATA;
+        if (json.optLong(KEY_EXT_SIZE, 0) > 0) inferred |= AppDataBackupRestoreManager.COMPONENT_EXTERNAL;
+        return inferred;
     }
 
     String getChecksum() { return mChecksum; }

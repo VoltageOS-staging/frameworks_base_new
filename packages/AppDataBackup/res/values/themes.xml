@@ -1,5 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AppDataBackup"
-        parent="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+
+    <!--
+      Material 3 Expressive base theme. Dynamic color (Material You) is applied at
+      runtime in AppDataBackupActivity#onCreate so the tool re-tints itself from the
+      user's wallpaper. The values below are the expressive fallback palette used on
+      devices without dynamic color support.
+    -->
+    <style name="Theme.AppDataBackup" parent="Theme.Material3Expressive.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/md_primary</item>
+        <item name="colorOnPrimary">@color/md_on_primary</item>
+        <item name="colorPrimaryContainer">@color/md_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/md_on_primary_container</item>
+        <item name="colorSecondaryContainer">@color/md_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/md_on_secondary_container</item>
+        <item name="colorTertiaryContainer">@color/md_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/md_on_tertiary_container</item>
+        <item name="android:colorBackground">@color/md_background</item>
+        <item name="colorSurface">@color/md_surface</item>
+        <item name="colorOnSurface">@color/md_on_surface</item>
+        <item name="colorSurfaceVariant">@color/md_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/md_on_surface_variant</item>
+        <item name="colorError">@color/md_error</item>
+
+        <!-- Edge to edge, expressive translucent system bars. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">?android:colorBackground</item>
+
+        <!-- Component defaults that give the whole app its rounded, expressive feel. -->
+        <item name="materialCardViewStyle">@style/Widget.AppDataBackup.Card</item>
+        <item name="extendedFloatingActionButtonStyle">@style/Widget.AppDataBackup.Fab</item>
+        <item name="tabStyle">@style/Widget.AppDataBackup.Tabs</item>
+        <item name="chipStyle">@style/Widget.AppDataBackup.Chip</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.AppDataBackup.Dialog</item>
+        <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.AppDataBackup.XLarge</item>
+    </style>
+
 </resources>
