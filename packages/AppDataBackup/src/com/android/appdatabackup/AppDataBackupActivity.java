@@ -17,42 +17,48 @@
 package com.android.appdatabackup;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.appbackup.AppBackupInfo;
 import android.app.appbackup.AppDataBackupRestoreManager;
 import android.app.appbackup.BackupRecord;
 import android.app.appbackup.BackupResult;
 import android.app.appbackup.IBackupProgressCallback;
 import android.app.appbackup.IRestoreProgressCallback;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.UserHandle;
-import android.text.InputType;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.ProgressBar;
-import android.widget.Switch;
+import android.view.animation.AnimationUtils;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.checkbox.MaterialCheckBox;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.color.DynamicColors;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.floatingtoolbar.FloatingToolbarLayout;
+import com.google.android.material.loadingindicator.LoadingIndicator;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
+import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -70,8 +76,6 @@ public class AppDataBackupActivity extends Activity {
     private static final String TAG = "AppDataBackupUI";
     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG)
             || Log.isLoggable(TAG, Log.VERBOSE);
-    private static final int MENU_SELECT_ALL = Menu.FIRST;
-    private static final int MENU_DESELECT_ALL = Menu.FIRST + 1;
 
     private AppDataBackupRestoreManager mManager;
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
@@ -82,10 +86,15 @@ public class AppDataBackupActivity extends Activity {
 
     private TabLayout mTabLayout;
     private ViewPager2 mViewPager;
-    private FloatingActionButton mFab;
-    private ProgressBar mProgressBar;
+    private FloatingToolbarLayout mFloatingToolbar;
+    private MaterialButton mBackupBtn;
+    private MaterialButton mExcludeCacheBtn;
+    private LoadingIndicator mLoadingIndicator;
+    private LinearProgressIndicator mProgressBar;
     private TextView mProgressText;
-    private Switch mExcludeCacheSwitch;
+    private TextView mSummaryCount;
+    private TextView mSummarySize;
+    private RecyclerView mAppsRv;
 
     private final List<AppBackupInfo> mApps = new ArrayList<>();
     private final Set<String> mSelectedPackages = new HashSet<>();
@@ -96,6 +105,8 @@ public class AppDataBackupActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Re-tint the whole tool from the user's wallpaper (Material You).
+        DynamicColors.applyToActivityIfAvailable(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_backup);
 
@@ -106,77 +117,110 @@ public class AppDataBackupActivity extends Activity {
 
         mTabLayout = findViewById(R.id.tab_layout);
         mViewPager = findViewById(R.id.view_pager);
-        mFab = findViewById(R.id.fab_backup);
+        mFloatingToolbar = findViewById(R.id.floating_toolbar);
+        mBackupBtn = findViewById(R.id.btn_backup);
+        mExcludeCacheBtn = findViewById(R.id.btn_exclude_cache);
+        mLoadingIndicator = findViewById(R.id.loading_indicator);
         mProgressBar = findViewById(R.id.progress_bar);
         mProgressText = findViewById(R.id.progress_text);
-        mExcludeCacheSwitch = findViewById(R.id.switch_exclude_cache);
+        mSummaryCount = findViewById(R.id.tv_summary_count);
+        mSummarySize = findViewById(R.id.tv_summary_size);
 
+        setupFloatingToolbar();
         setupViewPager();
-        setupFab();
+        updateSummary();
         loadAppsAsync();
         loadBackupsAsync();
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        menu.add(Menu.NONE, MENU_SELECT_ALL, 0, "Select all");
-        menu.add(Menu.NONE, MENU_DESELECT_ALL, 1, "Deselect all");
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == MENU_SELECT_ALL) {
-            for (AppBackupInfo info : mApps) mSelectedPackages.add(info.getPackageName());
-            mAppAdapter.notifyDataSetChanged();
-            return true;
-        } else if (item.getItemId() == MENU_DESELECT_ALL) {
-            mSelectedPackages.clear();
-            mAppAdapter.notifyDataSetChanged();
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    private void setupViewPager() {
-        final RecyclerView appsRv = new RecyclerView(this);
-        appsRv.setLayoutManager(new LinearLayoutManager(this));
-        appsRv.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
-        mAppAdapter = new AppListAdapter();
-        appsRv.setAdapter(mAppAdapter);
-
-        final RecyclerView backupsRv = new RecyclerView(this);
-        backupsRv.setLayoutManager(new LinearLayoutManager(this));
-        backupsRv.addItemDecoration(
-                new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
-        mBackupAdapter = new BackupListAdapter();
-        backupsRv.setAdapter(mBackupAdapter);
-
-        mViewPager.setAdapter(new TabPagerAdapter(appsRv, backupsRv));
-
-        new TabLayoutMediator(mTabLayout, mViewPager,
-                (tab, position) -> tab.setText(position == 0 ? "Apps" : "Backups"))
-                .attach();
-
-        mViewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-            @Override
-            public void onPageSelected(int position) {
-                mFab.setVisibility(position == 0 ? View.VISIBLE : View.GONE);
-            }
-        });
-    }
-
-    private void setupFab() {
-        mFab.setOnClickListener(v -> {
+    private void setupFloatingToolbar() {
+        findViewById(R.id.btn_select_all).setOnClickListener(v -> selectAll());
+        findViewById(R.id.btn_clear).setOnClickListener(v -> clearSelection());
+        mBackupBtn.setOnClickListener(v -> {
             if (mSelectedPackages.isEmpty()) {
-                Toast.makeText(this, "Select at least one app", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.select_at_least_one, Toast.LENGTH_SHORT).show();
                 return;
             }
             startBackup();
         });
     }
 
+    private void selectAll() {
+        for (AppBackupInfo info : mApps) mSelectedPackages.add(info.getPackageName());
+        if (mAppAdapter != null) mAppAdapter.notifyDataSetChanged();
+        updateSummary();
+    }
+
+    private void clearSelection() {
+        mSelectedPackages.clear();
+        if (mAppAdapter != null) mAppAdapter.notifyDataSetChanged();
+        updateSummary();
+    }
+
+    private void setupViewPager() {
+        mAppsRv = new RecyclerView(this);
+        mAppsRv.setLayoutManager(new LinearLayoutManager(this));
+        mAppsRv.setClipToPadding(false);
+        mAppsRv.setPadding(0, dp(4),
+                0, getResources().getDimensionPixelSize(R.dimen.list_bottom_inset));
+        mAppsRv.setLayoutAnimation(AnimationUtils.loadLayoutAnimation(
+                this, R.anim.layout_animation_fall_down));
+        mAppAdapter = new AppListAdapter();
+        mAppsRv.setAdapter(mAppAdapter);
+
+        final RecyclerView backupsRv = new RecyclerView(this);
+        backupsRv.setLayoutManager(new LinearLayoutManager(this));
+        backupsRv.setClipToPadding(false);
+        backupsRv.setPadding(0, dp(4), 0, dp(24));
+        backupsRv.setLayoutAnimation(AnimationUtils.loadLayoutAnimation(
+                this, R.anim.layout_animation_fall_down));
+        mBackupAdapter = new BackupListAdapter();
+        backupsRv.setAdapter(mBackupAdapter);
+
+        mViewPager.setAdapter(new TabPagerAdapter(mAppsRv, backupsRv));
+
+        new TabLayoutMediator(mTabLayout, mViewPager, (tab, position) -> {
+            if (position == 0) {
+                tab.setText(R.string.tab_apps);
+                tab.setIcon(R.drawable.ic_apps_24);
+            } else {
+                tab.setText(R.string.tab_backups);
+                tab.setIcon(R.drawable.ic_archive_24);
+            }
+        }).attach();
+
+        mViewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                // The action toolbar only applies to the Apps tab.
+                mFloatingToolbar.setVisibility(position == 0 ? View.VISIBLE : View.GONE);
+            }
+        });
+    }
+
+    private void updateSummary() {
+        final int n = mSelectedPackages.size();
+        long total = 0;
+        for (AppBackupInfo info : mApps) {
+            if (mSelectedPackages.contains(info.getPackageName())) {
+                total += Math.max(0, info.getDataSize());
+            }
+        }
+        if (n == 0) {
+            mSummaryCount.setText(R.string.summary_empty_count);
+            mSummarySize.setText(R.string.summary_empty_size);
+            mBackupBtn.setText(R.string.action_back_up);
+        } else {
+            mSummaryCount.setText(n == 1
+                    ? getString(R.string.summary_count_one)
+                    : getString(R.string.summary_count, n));
+            mSummarySize.setText(getString(R.string.summary_size, formatBytes(total)));
+            mBackupBtn.setText(getString(R.string.fab_backup_count, n));
+        }
+    }
+
     private void loadAppsAsync() {
+        mLoadingIndicator.setVisibility(View.VISIBLE);
         mExecutor.submit(() -> {
             final List<AppBackupInfo> apps = mManager.getInstalledApps();
             if (DEBUG) {
@@ -186,6 +230,9 @@ public class AppDataBackupActivity extends Activity {
                 mApps.clear();
                 mApps.addAll(apps);
                 mAppAdapter.notifyDataSetChanged();
+                mLoadingIndicator.setVisibility(View.GONE);
+                if (mAppsRv != null) mAppsRv.scheduleLayoutAnimation();
+                updateSummary();
             });
         });
     }
@@ -209,53 +256,26 @@ public class AppDataBackupActivity extends Activity {
     private void startBackup() {
         // Optional encryption, per-component selection and retention. An empty
         // passphrase means an unencrypted backup.
-        final int pad = (int) (20 * getResources().getDisplayMetrics().density);
-        final LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(pad, pad / 2, pad, 0);
+        final View dialogView = LayoutInflater.from(this)
+                .inflate(R.layout.dialog_backup_options, null, false);
+        final TextInputEditText passInput = dialogView.findViewById(R.id.et_passphrase);
+        final TextInputEditText keepInput = dialogView.findViewById(R.id.et_keep);
+        final Chip apkBox = dialogView.findViewById(R.id.chip_apk);
+        final Chip ceBox = dialogView.findViewById(R.id.chip_ce);
+        final Chip deBox = dialogView.findViewById(R.id.chip_de);
+        final Chip extBox = dialogView.findViewById(R.id.chip_ext);
 
-        final EditText passInput = new EditText(this);
-        passInput.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        passInput.setHint("Passphrase (leave empty = no encryption)");
-        layout.addView(passInput);
-
-        final CheckBox apkBox = new CheckBox(this);
-        apkBox.setText("App (APK)");
-        apkBox.setChecked(true);
-        layout.addView(apkBox);
-
-        final CheckBox ceBox = new CheckBox(this);
-        ceBox.setText("App data");
-        ceBox.setChecked(true);
-        layout.addView(ceBox);
-
-        final CheckBox deBox = new CheckBox(this);
-        deBox.setText("Device-protected data");
-        deBox.setChecked(true);
-        layout.addView(deBox);
-
-        final CheckBox extBox = new CheckBox(this);
-        extBox.setText("External (app-private) data");
-        extBox.setChecked(true);
-        layout.addView(extBox);
-
-        final EditText keepInput = new EditText(this);
-        keepInput.setInputType(InputType.TYPE_CLASS_NUMBER);
-        keepInput.setHint("Keep last N backups (empty = keep all)");
-        layout.addView(keepInput);
-
-        new AlertDialog.Builder(this)
-                .setTitle("Backup options")
-                .setView(layout)
-                .setPositiveButton("Back up", (d, w) -> {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.backup_options_title)
+                .setView(dialogView)
+                .setPositiveButton(R.string.action_back_up, (d, w) -> {
                     int components = 0;
                     if (apkBox.isChecked()) components |= AppDataBackupRestoreManager.COMPONENT_APK;
                     if (ceBox.isChecked()) components |= AppDataBackupRestoreManager.COMPONENT_CE_DATA;
                     if (deBox.isChecked()) components |= AppDataBackupRestoreManager.COMPONENT_DE_DATA;
                     if (extBox.isChecked()) components |= AppDataBackupRestoreManager.COMPONENT_EXTERNAL;
                     if (components == 0) {
-                        Toast.makeText(this, "Select at least one component",
+                        Toast.makeText(this, R.string.select_one_component,
                                 Toast.LENGTH_SHORT).show();
                         return;
                     }
@@ -273,13 +293,13 @@ public class AppDataBackupActivity extends Activity {
                             ? passInput.getText().toString() : "";
                     doBackup(pass.isEmpty() ? null : pass, components, keep);
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show();
     }
 
     private void doBackup(String passphrase, int components, int keepVersions) {
-        final boolean excludeCache = mExcludeCacheSwitch != null
-                && mExcludeCacheSwitch.isChecked();
+        final boolean excludeCache = mExcludeCacheBtn != null
+                && mExcludeCacheBtn.isChecked();
         showProgress("Preparing backup...");
 
         mCurrentOperationToken = mManager.backupPackages(
@@ -296,6 +316,7 @@ public class AppDataBackupActivity extends Activity {
                     public void onPackageBackupStarted(String token, String pkg,
                             int idx, int total) {
                         updateProgress("Backing up " + pkg + " (" + idx + "/" + total + ")");
+                        setDeterminateProgress(idx, total);
                     }
 
                     @Override
@@ -335,13 +356,12 @@ public class AppDataBackupActivity extends Activity {
     }
 
     private void startRestore(BackupRecord record) {
-        new AlertDialog.Builder(this)
-                .setTitle("Restore " + record.getLabel() + "?")
-                .setMessage("This will reinstall the APK and overwrite all app data.\n"
-                        + "The app will be force-stopped during restore.")
-                .setPositiveButton("Restore", (d, w) -> confirmRestorePassphrase(record))
-                .setNeutralButton("Verify", (d, w) -> verifyBackup(record))
-                .setNegativeButton("Cancel", null)
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(getString(R.string.confirm_restore_title, record.getLabel()))
+                .setMessage(R.string.confirm_restore_message)
+                .setPositiveButton(R.string.restore, (d, w) -> confirmRestorePassphrase(record))
+                .setNeutralButton(R.string.verify, (d, w) -> verifyBackup(record))
+                .setNegativeButton(R.string.cancel, null)
                 .show();
     }
 
@@ -350,20 +370,18 @@ public class AppDataBackupActivity extends Activity {
             doVerify(record, null);
             return;
         }
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        input.setHint("Backup passphrase");
-        new AlertDialog.Builder(this)
+        final View view = buildPassphraseView();
+        final TextInputEditText input = view.findViewById(R.id.et_passphrase);
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Verify encrypted backup")
                 .setMessage("This backup is encrypted. Enter its passphrase to verify.")
-                .setView(input)
-                .setPositiveButton("Verify", (d, w) -> {
+                .setView(view)
+                .setPositiveButton(R.string.verify, (d, w) -> {
                     final String pass = input.getText() != null
                             ? input.getText().toString() : "";
                     doVerify(record, pass.isEmpty() ? null : pass);
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show();
     }
 
@@ -386,15 +404,13 @@ public class AppDataBackupActivity extends Activity {
             doRestore(record, null);
             return;
         }
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        input.setHint("Backup passphrase");
-        new AlertDialog.Builder(this)
+        final View view = buildPassphraseView();
+        final TextInputEditText input = view.findViewById(R.id.et_passphrase);
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Encrypted backup")
                 .setMessage("This backup is encrypted. Enter its passphrase to restore.")
-                .setView(input)
-                .setPositiveButton("Restore", (d, w) -> {
+                .setView(view)
+                .setPositiveButton(R.string.restore, (d, w) -> {
                     final String pass = input.getText() != null
                             ? input.getText().toString() : "";
                     if (pass.isEmpty()) {
@@ -404,8 +420,17 @@ public class AppDataBackupActivity extends Activity {
                     }
                     doRestore(record, pass);
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show();
+    }
+
+    private View buildPassphraseView() {
+        // Reuse the styled outlined passphrase field from the options dialog.
+        final View view = LayoutInflater.from(this)
+                .inflate(R.layout.dialog_backup_options, null, false);
+        view.findViewById(R.id.til_keep).setVisibility(View.GONE);
+        view.findViewById(R.id.chip_group_components).setVisibility(View.GONE);
+        return view;
     }
 
     private void doRestore(BackupRecord record, String passphrase) {
@@ -423,6 +448,7 @@ public class AppDataBackupActivity extends Activity {
                     public void onPackageRestoreStarted(String token, String pkg,
                             int idx, int total) {
                         updateProgress("Installing APK for " + pkg + "...");
+                        setDeterminateProgress(idx, total);
                     }
 
                     @Override
@@ -460,9 +486,10 @@ public class AppDataBackupActivity extends Activity {
     private void showProgress(String message) {
         mMainHandler.post(() -> {
             mProgressBar.setVisibility(View.VISIBLE);
+            mProgressBar.setIndeterminate(true);
             mProgressText.setVisibility(View.VISIBLE);
             mProgressText.setText(message);
-            mFab.setEnabled(false);
+            mBackupBtn.setEnabled(false);
         });
     }
 
@@ -470,17 +497,73 @@ public class AppDataBackupActivity extends Activity {
         mMainHandler.post(() -> mProgressText.setText(message));
     }
 
+    private void setDeterminateProgress(int idx, int total) {
+        if (total <= 0) return;
+        final int pct = Math.max(0, Math.min(100, Math.round(idx * 100f / total)));
+        mMainHandler.post(() -> {
+            if (mProgressBar.isIndeterminate()) mProgressBar.setIndeterminate(false);
+            // Animates the wave crest along the track.
+            mProgressBar.setProgressCompat(pct, true);
+        });
+    }
+
     private void hideProgress() {
         mProgressBar.setVisibility(View.GONE);
         mProgressText.setVisibility(View.GONE);
-        mFab.setEnabled(true);
+        mBackupBtn.setEnabled(true);
+    }
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    /**
+     * Shows the app's real launcher icon when the package is installed, otherwise
+     * paints a colorful, rounded "squircle" tile from the app's initial (e.g. for
+     * backups of apps that are no longer installed).
+     */
+    private void bindAvatar(FrameLayout box, ImageView icon, TextView initial,
+            String label, String key) {
+        final Drawable appIcon = loadAppIcon(key);
+        if (appIcon != null) {
+            box.setBackground(null);
+            initial.setVisibility(View.GONE);
+            icon.setImageDrawable(appIcon);
+            icon.setVisibility(View.VISIBLE);
+            return;
+        }
+        icon.setVisibility(View.GONE);
+        icon.setImageDrawable(null);
+        initial.setVisibility(View.VISIBLE);
+        final int color = avatarColor(key);
+        final GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(16));
+        bg.setColor(color);
+        box.setBackground(bg);
+        final String text = (label == null || label.isEmpty())
+                ? "?" : label.substring(0, 1).toUpperCase(Locale.getDefault());
+        initial.setText(text);
+    }
+
+    /** Loads an installed app's icon, or returns null if the package isn't present. */
+    private Drawable loadAppIcon(String packageName) {
+        if (packageName == null || packageName.isEmpty()) return null;
+        try {
+            return getPackageManager().getApplicationIcon(packageName);
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+    }
+
+    private static int avatarColor(String key) {
+        final int hash = key == null ? 0 : key.hashCode();
+        final float hue = Math.abs(hash) % 360;
+        return Color.HSVToColor(new float[] { hue, 0.62f, 0.62f });
     }
 
     private final class AppListAdapter
             extends RecyclerView.Adapter<AppListAdapter.ViewHolder> {
-
-        private static final SimpleDateFormat SDF =
-                new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
 
         @NonNull
         @Override
@@ -492,26 +575,43 @@ public class AppDataBackupActivity extends Activity {
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             final AppBackupInfo info = mApps.get(position);
+            final boolean selected = mSelectedPackages.contains(info.getPackageName());
             holder.label.setText(info.getLabel());
             holder.pkg.setText(info.getPackageName() + "  v" + info.getVersionName());
             holder.dataSize.setText(formatBytes(info.getDataSize()));
-            holder.checkbox.setChecked(mSelectedPackages.contains(info.getPackageName()));
-            holder.checkbox.setOnCheckedChangeListener((btn, checked) -> {
-                if (checked) mSelectedPackages.add(info.getPackageName());
-                else mSelectedPackages.remove(info.getPackageName());
-            });
+            bindAvatar(holder.avatarBox, holder.icon, holder.avatar, info.getLabel(), info.getPackageName());
+            holder.checkbox.setOnCheckedChangeListener(null);
+            holder.checkbox.setChecked(selected);
+            holder.card.setStrokeWidth(selected ? dp(2) : 0);
+            holder.checkbox.setOnCheckedChangeListener((btn, checked) ->
+                    toggle(info, holder, checked));
             holder.itemView.setOnClickListener(v ->
-                    holder.checkbox.setChecked(!holder.checkbox.isChecked()));
+                    toggle(info, holder, !holder.checkbox.isChecked()));
+        }
+
+        private void toggle(AppBackupInfo info, ViewHolder holder, boolean checked) {
+            if (checked) mSelectedPackages.add(info.getPackageName());
+            else mSelectedPackages.remove(info.getPackageName());
+            holder.checkbox.setChecked(checked);
+            holder.card.setStrokeWidth(checked ? dp(2) : 0);
+            updateSummary();
         }
 
         @Override
         public int getItemCount() { return mApps.size(); }
 
         class ViewHolder extends RecyclerView.ViewHolder {
-            TextView label, pkg, dataSize;
-            CheckBox checkbox;
+            MaterialCardView card;
+            FrameLayout avatarBox;
+            ImageView icon;
+            TextView avatar, label, pkg, dataSize;
+            MaterialCheckBox checkbox;
             ViewHolder(View v) {
                 super(v);
+                card = (MaterialCardView) v;
+                avatarBox = v.findViewById(R.id.avatar_box);
+                icon = v.findViewById(R.id.img_avatar);
+                avatar = v.findViewById(R.id.tv_avatar);
                 label = v.findViewById(R.id.tv_label);
                 pkg = v.findViewById(R.id.tv_package);
                 dataSize = v.findViewById(R.id.tv_data_size);
@@ -523,8 +623,8 @@ public class AppDataBackupActivity extends Activity {
     private final class BackupListAdapter
             extends RecyclerView.Adapter<BackupListAdapter.ViewHolder> {
 
-        private static final SimpleDateFormat SDF =
-                new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+        private final SimpleDateFormat mDateFormat =
+                new SimpleDateFormat("MMM d, HH:mm", Locale.getDefault());
 
         @NonNull
         @Override
@@ -538,10 +638,13 @@ public class AppDataBackupActivity extends Activity {
             final BackupRecord record = mBackups.get(position);
             holder.label.setText(record.getLabel());
             holder.pkg.setText(record.getPackageName());
-            holder.meta.setText("v" + record.getVersionName()
-                    + "  •  " + SDF.format(new Date(record.getTimestampMs()))
-                    + "  •  " + formatBytes(record.getTotalSize()));
+            bindAvatar(holder.avatarBox, holder.icon, holder.avatar, record.getLabel(), record.getPackageName());
+            holder.version.setText("v" + record.getVersionName());
+            holder.date.setText(mDateFormat.format(new Date(record.getTimestampMs())));
+            holder.size.setText(formatBytes(record.getTotalSize()));
+            holder.contents.setText(buildContents(record));
             holder.btnRestore.setOnClickListener(v -> startRestore(record));
+            holder.btnVerify.setOnClickListener(v -> verifyBackup(record));
             holder.btnDelete.setOnClickListener(v -> confirmDelete(record));
         }
 
@@ -549,32 +652,38 @@ public class AppDataBackupActivity extends Activity {
         public int getItemCount() { return mBackups.size(); }
 
         class ViewHolder extends RecyclerView.ViewHolder {
-            TextView label, pkg, meta;
-            Button btnRestore, btnDelete;
+            FrameLayout avatarBox;
+            ImageView icon;
+            TextView avatar, label, pkg, version, date, size, contents;
+            MaterialButton btnRestore, btnVerify, btnDelete;
             ViewHolder(View v) {
                 super(v);
+                avatarBox = v.findViewById(R.id.avatar_box);
+                icon = v.findViewById(R.id.img_avatar);
+                avatar = v.findViewById(R.id.tv_avatar);
                 label = v.findViewById(R.id.tv_label);
                 pkg = v.findViewById(R.id.tv_package);
-                meta = v.findViewById(R.id.tv_meta);
+                version = v.findViewById(R.id.tv_version);
+                date = v.findViewById(R.id.tv_date);
+                size = v.findViewById(R.id.tv_size);
+                contents = v.findViewById(R.id.tv_contents);
                 btnRestore = v.findViewById(R.id.btn_restore);
+                btnVerify = v.findViewById(R.id.btn_verify);
                 btnDelete = v.findViewById(R.id.btn_delete);
             }
         }
 
         private void confirmDelete(BackupRecord record) {
-            new AlertDialog.Builder(AppDataBackupActivity.this)
-                    .setTitle("Delete backup?")
-                    .setMessage("Delete backup of " + record.getLabel()
-                            + " from " + new SimpleDateFormat("yyyy-MM-dd HH:mm",
-                            Locale.getDefault()).format(new Date(record.getTimestampMs()))
-                            + "?\nThis cannot be undone.")
-                    .setPositiveButton("Delete", (d, w) -> {
+            new MaterialAlertDialogBuilder(AppDataBackupActivity.this)
+                    .setTitle(R.string.confirm_delete_title)
+                    .setMessage(getString(R.string.confirm_delete_message, record.getLabel()))
+                    .setPositiveButton(R.string.delete, (d, w) -> {
                         mExecutor.submit(() -> {
                             mManager.deleteBackup(record.getId(), record.getBackupDir());
                             mMainHandler.post(() -> loadBackupsAsync());
                         });
                     })
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(R.string.cancel, null)
                     .show();
         }
     }
@@ -607,6 +716,35 @@ public class AppDataBackupActivity extends Activity {
         static class VH extends RecyclerView.ViewHolder {
             VH(RecyclerView rv) { super(rv); }
         }
+    }
+
+    /**
+     * Describes what a snapshot actually contains, using the component bitmask
+     * persisted in the backup manifest. Runtime permissions, app-ops and SSAID
+     * are always captured alongside the data, so they are always listed.
+     */
+    private String buildContents(BackupRecord record) {
+        final int components = record.getComponents();
+        final List<String> parts = new ArrayList<>();
+        if ((components & AppDataBackupRestoreManager.COMPONENT_APK) != 0) {
+            parts.add(getString(R.string.content_apk));
+        }
+        if ((components & AppDataBackupRestoreManager.COMPONENT_CE_DATA) != 0) {
+            parts.add(getString(R.string.content_app_data));
+        }
+        if ((components & AppDataBackupRestoreManager.COMPONENT_DE_DATA) != 0) {
+            parts.add(getString(R.string.content_device_data));
+        }
+        if ((components & AppDataBackupRestoreManager.COMPONENT_EXTERNAL) != 0) {
+            parts.add(getString(R.string.content_external));
+        }
+        parts.add(getString(R.string.content_permissions));
+        String includes = getString(R.string.content_includes,
+                TextUtils.join("  \u00b7  ", parts));
+        if (record.isEncrypted()) {
+            includes += "  \u00b7  " + getString(R.string.content_encrypted);
+        }
+        return includes;
     }
 
     private static String formatBytes(long bytes) {

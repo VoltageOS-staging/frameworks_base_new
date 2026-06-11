@@ -193,6 +193,7 @@ public class BackupEngine {
                     packageInfo.versionName,
                     getLongVersionCode(packageInfo),
                     timestampMs, apkSize, ceDataSize, deDataSize, extDataSize,
+                    components,
                     encrypted,
                     partial ? BackupRecord.STATE_PARTIAL : BackupRecord.STATE_OK,
                     checksum, userId);

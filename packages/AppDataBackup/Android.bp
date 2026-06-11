@@ -26,6 +26,7 @@ android_app {
     static_libs: [
         "androidx.recyclerview_recyclerview",
         "androidx.viewpager2_viewpager2",
+        "androidx.coordinatorlayout_coordinatorlayout",
         "com.google.android.material_material",
     ],
 }
