@@ -3,22 +3,22 @@
     android:interpolator="@android:anim/overshoot_interpolator">
 
     <translate
-        android:fromYDelta="18%"
+        android:fromYDelta="12%"
         android:toYDelta="0"
-        android:duration="420" />
+        android:duration="360" />
 
     <alpha
         android:fromAlpha="0.0"
         android:toAlpha="1.0"
-        android:duration="300" />
+        android:duration="360" />
 
     <scale
-        android:fromXScale="0.88"
+        android:fromXScale="0.96"
         android:toXScale="1.0"
-        android:fromYScale="0.88"
+        android:fromYScale="0.96"
         android:toYScale="1.0"
-        android:pivotX="20%"
-        android:pivotY="10%"
-        android:duration="420" />
+        android:pivotX="50%"
+        android:pivotY="0%"
+        android:duration="360" />
 
 </set>

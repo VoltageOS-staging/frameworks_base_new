@@ -10,7 +10,6 @@
     android:clickable="true"
     android:focusable="true"
     app:cardBackgroundColor="?attr/colorSurfaceVariant"
-    app:shapeAppearance="@style/ShapeAppearance.AppDataBackup.CardExpressive"
     app:strokeColor="?attr/colorPrimary"
     app:strokeWidth="0dp">
 
