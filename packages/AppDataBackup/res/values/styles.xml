@@ -10,6 +10,25 @@
         <item name="cornerSize">24dp</item>
     </style>
 
+    <!--
+      Signature "diagonal" silhouette: two opposite corners stay extra-soft while
+      the other two tuck in tight. Applied across cards / avatars / the summary so
+      the whole app reads as one bespoke shape language instead of stock M3.
+    -->
+    <style name="ShapeAppearance.AppDataBackup.CardExpressive" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSizeTopLeft">22dp</item>
+        <item name="cornerSizeTopRight">8dp</item>
+        <item name="cornerSizeBottomRight">22dp</item>
+        <item name="cornerSizeBottomLeft">8dp</item>
+    </style>
+
+    <style name="ShapeAppearance.AppDataBackup.SummaryExpressive" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
+        <item name="cornerSizeTopLeft">28dp</item>
+        <item name="cornerSizeTopRight">12dp</item>
+        <item name="cornerSizeBottomRight">28dp</item>
+        <item name="cornerSizeBottomLeft">12dp</item>
+    </style>
+
     <!-- Tonal, borderless cards that float on the background. -->
     <style name="Widget.AppDataBackup.Card" parent="Widget.Material3.CardView.Filled">
         <item name="cardBackgroundColor">?attr/colorSurfaceVariant</item>
@@ -65,10 +84,13 @@
         <item name="android:textColor">#FFFFFF</item>
     </style>
 
-    <!-- Rounded mask applied to real app-icon avatars. -->
+    <!-- Rounded mask applied to real app-icon avatars; echoes the diagonal card shape. -->
     <style name="ShapeAppearanceOverlay.AppDataBackup.Avatar" parent="">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">16dp</item>
+        <item name="cornerSizeTopLeft">18dp</item>
+        <item name="cornerSizeTopRight">6dp</item>
+        <item name="cornerSizeBottomRight">18dp</item>
+        <item name="cornerSizeBottomLeft">6dp</item>
     </style>
 
     <!-- Small metadata pill (version / date / size). -->

@@ -24,6 +24,7 @@ import android.app.appbackup.BackupResult;
 import android.app.appbackup.IBackupProgressCallback;
 import android.app.appbackup.IRestoreProgressCallback;
 import android.content.pm.PackageManager;
+import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -34,9 +35,11 @@ import android.os.UserHandle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AnimationUtils;
+import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -52,6 +55,7 @@ import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.color.DynamicColors;
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingtoolbar.FloatingToolbarLayout;
 import com.google.android.material.loadingindicator.LoadingIndicator;
@@ -95,6 +99,12 @@ public class AppDataBackupActivity extends Activity {
     private TextView mSummaryCount;
     private TextView mSummarySize;
     private RecyclerView mAppsRv;
+    private MaterialCardView mSummaryCard;
+    private int mLastSummaryCount = 0;
+    private int mCardColorDefault;
+    private int mCardColorSelected;
+    private View mSummaryGlow;
+    private GradientDrawable mGlowDrawable;
 
     private final List<AppBackupInfo> mApps = new ArrayList<>();
     private final Set<String> mSelectedPackages = new HashSet<>();
@@ -125,6 +135,11 @@ public class AppDataBackupActivity extends Activity {
         mProgressText = findViewById(R.id.progress_text);
         mSummaryCount = findViewById(R.id.tv_summary_count);
         mSummarySize = findViewById(R.id.tv_summary_size);
+        mSummaryCard = findViewById(R.id.summary_card);
+
+        mCardColorDefault = themeColor(com.google.android.material.R.attr.colorSurfaceVariant);
+        mCardColorSelected = themeColor(com.google.android.material.R.attr.colorPrimaryContainer);
+        setupHeroSurfaces();
 
         setupFloatingToolbar();
         setupViewPager();
@@ -211,12 +226,140 @@ public class AppDataBackupActivity extends Activity {
             mSummarySize.setText(R.string.summary_empty_size);
             mBackupBtn.setText(R.string.action_back_up);
         } else {
-            mSummaryCount.setText(n == 1
-                    ? getString(R.string.summary_count_one)
-                    : getString(R.string.summary_count, n));
             mSummarySize.setText(getString(R.string.summary_size, formatBytes(total)));
             mBackupBtn.setText(getString(R.string.fab_backup_count, n));
+            animateSummaryCount(mLastSummaryCount, n);
         }
+        if (n != mLastSummaryCount) popSummaryCard();
+        mLastSummaryCount = n;
+    }
+
+    /** Resolves a theme color attribute, falling back to magenta if missing. */
+    private int themeColor(int attr) {
+        return MaterialColors.getColor(this, attr, Color.MAGENTA);
+    }
+
+    /** Linear blend between two ARGB colors. */
+    private static int blend(int a, int b, float t) {
+        final int aa = (a >>> 24) & 0xFF, ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+        final int ba = (b >>> 24) & 0xFF, br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
+        return (Math.round(aa + (ba - aa) * t) << 24)
+                | (Math.round(ar + (br - ar) * t) << 16)
+                | (Math.round(ag + (bg - ag) * t) << 8)
+                | Math.round(ab + (bb - ab) * t);
+    }
+
+    /** Clamps to the [0,1] range. */
+    private static float clamp01(float v) {
+        return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
+
+    /**
+     * Paints the selection summary as a vivid diagonal gradient centerpiece and
+     * lays a soft tonal glow behind the headline so the top never reads as flat.
+     * Colors are pulled from the live theme, so it re-tints with Material You.
+     */
+    private void setupHeroSurfaces() {
+        final int base = themeColor(com.google.android.material.R.attr.colorPrimaryContainer);
+        final int deep = blend(base, themeColor(android.R.attr.colorPrimary), 0.30f);
+        final float xl = dp(28), sm = dp(12);
+
+        // Calm single-hue duotone, not a multi-color gradient.
+        final View surface = findViewById(R.id.summary_surface);
+        if (surface != null) {
+            final GradientDrawable g = new GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR, new int[] { base, deep });
+            g.setCornerRadii(new float[] { xl, xl, sm, sm, xl, xl, sm, sm });
+            surface.setBackground(g);
+        }
+        if (mSummaryCard != null) {
+            mSummaryCard.setCardBackgroundColor(Color.TRANSPARENT);
+        }
+
+        // A soft light: a resting sheen near the icon for depth, brightening
+        // and following the finger on touch. The center only moves while
+        // touched and nothing animates at rest, so it stays cheap.
+        mSummaryGlow = findViewById(R.id.summary_glow);
+        if (mSummaryGlow != null) {
+            mGlowDrawable = new GradientDrawable();
+            mGlowDrawable.setShape(GradientDrawable.RECTANGLE);
+            mGlowDrawable.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+            mGlowDrawable.setColors(new int[] { 0x59FFFFFF, 0x00FFFFFF });
+            mGlowDrawable.setGradientRadius(dp(120));
+            mGlowDrawable.setGradientCenter(0.18f, 0.32f);
+            mSummaryGlow.setBackground(mGlowDrawable);
+            mSummaryGlow.setAlpha(0.45f);
+        }
+        if (mSummaryCard != null) {
+            mSummaryCard.setOnTouchListener((v, e) -> {
+                if (mSummaryGlow == null || mGlowDrawable == null) return false;
+                final float w = Math.max(1f, v.getWidth());
+                final float h = Math.max(1f, v.getHeight());
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        mSummaryGlow.animate().alpha(0.95f).setDuration(140).start();
+                        // fall through to position the glow immediately
+                    case MotionEvent.ACTION_MOVE:
+                        mGlowDrawable.setGradientCenter(clamp01(e.getX() / w), clamp01(e.getY() / h));
+                        mSummaryGlow.invalidate();
+                        break;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        mSummaryGlow.animate().alpha(0.45f)
+                                .setInterpolator(new OvershootInterpolator())
+                                .setDuration(320).start();
+                        mGlowDrawable.setGradientCenter(0.18f, 0.32f);
+                        mSummaryGlow.invalidate();
+                        break;
+                }
+                return false;
+            });
+        }
+
+        final View hero = findViewById(R.id.header_hero);
+        if (hero != null) {
+            final int wash = (0x33 << 24) | (base & 0x00FFFFFF);
+            hero.setBackground(new GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[] { wash, Color.TRANSPARENT }));
+        }
+    }
+
+    /** Counts the headline number toward its new value so the centerpiece feels alive. */
+    private void animateSummaryCount(int from, int to) {
+        final ValueAnimator anim = ValueAnimator.ofInt(from, to);
+        anim.setDuration(420);
+        anim.addUpdateListener(a -> {
+            final int v = (int) a.getAnimatedValue();
+            mSummaryCount.setText(v == 1
+                    ? getString(R.string.summary_count_one)
+                    : getString(R.string.summary_count, v));
+        });
+        anim.start();
+    }
+
+    /** A quick spring pop that draws the eye whenever the selection changes. */
+    private void popSummaryCard() {
+        if (mSummaryCard == null) return;
+        mSummaryCard.animate().cancel();
+        mSummaryCard.setScaleX(0.97f);
+        mSummaryCard.setScaleY(0.97f);
+        mSummaryCard.animate()
+                .scaleX(1f).scaleY(1f)
+                .setInterpolator(new OvershootInterpolator(3f))
+                .setDuration(300)
+                .start();
+    }
+
+    /** Bouncy tap feedback when an item card is toggled. */
+    private void springTap(View v) {
+        v.animate().cancel();
+        v.setScaleX(0.94f);
+        v.setScaleY(0.94f);
+        v.animate().scaleX(1f).scaleY(1f)
+                .setInterpolator(new OvershootInterpolator())
+                .setDuration(320)
+                .start();
     }
 
     private void loadAppsAsync() {
@@ -538,7 +681,8 @@ public class AppDataBackupActivity extends Activity {
         final int color = avatarColor(key);
         final GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(16));
+        final float lg = dp(18), sm = dp(6);
+        bg.setCornerRadii(new float[] { lg, lg, sm, sm, lg, lg, sm, sm });
         bg.setColor(color);
         box.setBackground(bg);
         final String text = (label == null || label.isEmpty())
@@ -583,6 +727,7 @@ public class AppDataBackupActivity extends Activity {
             holder.checkbox.setOnCheckedChangeListener(null);
             holder.checkbox.setChecked(selected);
             holder.card.setStrokeWidth(selected ? dp(2) : 0);
+            holder.card.setCardBackgroundColor(selected ? mCardColorSelected : mCardColorDefault);
             holder.checkbox.setOnCheckedChangeListener((btn, checked) ->
                     toggle(info, holder, checked));
             holder.itemView.setOnClickListener(v ->
@@ -594,6 +739,8 @@ public class AppDataBackupActivity extends Activity {
             else mSelectedPackages.remove(info.getPackageName());
             holder.checkbox.setChecked(checked);
             holder.card.setStrokeWidth(checked ? dp(2) : 0);
+            holder.card.setCardBackgroundColor(checked ? mCardColorSelected : mCardColorDefault);
+            springTap(holder.card);
             updateSummary();
         }
 
